@@ -79,20 +79,23 @@
 % \end{abstract}
 
 \begin{abstract}
-Abstract Here
+\textit{In this paper, we aim to give a richer theoretical understanding of precisely why overparameterization and batch normalization allow for quicker convergence to global and local optima during training. Overparameterization and batch normalization has been shown extensively to work well in practice in terms of speeding up training. However, many of these empirical works that focus on building network architectures do not capture the theoretical essence behind why and how these methods work in practice. In this paper, we answer this question by diving into how each respective method works from a rich theoretical perspective. First, we present a quantity known as ``gradient confusion'' from recent research work by Sankararaman et al. \cite{gradient_confusion}, and we show how it directly correlates to training speed. Second, we show how several methods (such as overparameterization and batch normalization) share the characteristic of having low gradient confusion. Third, we dive deeper into the theoretical and experimental aspects of both overparameterization and batch normalization in order to show precisely why training speeds are enhanced via these methods, and how they work to lower gradient confusion.}
 \end{abstract}
 
 \section{Introduction}
-\textit{Neural networks have seen remarkable progress in recent years in terms of approximating complex functions using various optimization methods such as stochastic gradient descent. In particular, neural networks in practice have shown how \textit{overparameterization} (an increase in parameters of a model over the number of training data) and \textit{batch normalization}, are able to make complex neural networks easier to train. However, prior to recent research, not much was understood in terms of concretely defining why these methods work so well to speed up training. \textbf{Why, precisely, do overparameterization and batch normalization allow for quicker convergence to global and local minima?} In this paper we address this question by investigating a recently-developed concept known as \textit{gradient confusion}, a measure of differences between stochastic gradients of each data sample in a training set, that causes convergence to slow down. We also will discuss overparameterization and batch normalization in-depth, which can be shown (both empirically and theoretically) to lower gradient confusion and thus speed up training.}
+Neural networks have seen remarkable progress in recent years in terms of approximating complex functions using various optimization methods such as stochastic gradient descent. In particular, neural networks in practice have shown how \textit{overparameterization} (an increase in parameters of a model over the number of training data) and \textit{batch normalization}, are able to make complex neural networks easier to train. However, prior to recent research, not much was understood in terms of concretely defining why these methods work so well to speed up training. \textbf{Why, precisely, do overparameterization and batch normalization allow for quicker convergence to global and local minima?} Many papers showcase these results empirically rather than from a theoretical perspective. In this paper we address this question by investigating a recently-developed concept known as \textit{gradient confusion}, a measure of differences between stochastic gradients of each data sample in a training set, that causes convergence to slow down. We also will discuss overparameterization and batch normalization in-depth, which can be shown (both empirically and theoretically) to lower gradient confusion and thus speed up training.
+
+This paper is divided into three subparts: Gradient confusion, overparameterization, and batch normalization. We also have broken the discussion of each subpart into three sections. Firstly, we describe each respective problem setup by defining terms; secondly, we describe existing theoretical and experimental work in order to justify each concept's importance (while also describing any new theoretical expressions, findings, notes, or corrections along the way); thirdly, we describe our own findings from crafted experiments. To conclude, we discuss our own appreciations and reservations for each of the topics.
 
 
-\section{Stochastic Gradient Descent and the Definition of Gradient Confusion}
+\section{Gradient Confusion}
+\subsection{What is Gradient Confusion?}
 We first define gradient confusion in the context of stochastic gradient descent (SGD). Given $N$ training points $X = x_1,...,x_N$, we proceed with gradient descent, back-propagating for each training point. Using these training points, we can specify $N$ loss functions, $\{f\}_{i \in [N]}$. Then we use SGD to solve the empirical risk minimization problem; that is, we hope to find optimal solution
 $$w^* = \text{arg min}_{w \in \mathbb{R}^d} \frac{1}{N} \sum_{i=1}^N f_i (w).$$
 Then for iteration $k$ of the algorithm, a uniformly-random example and its loss function $\nabla \tilde{f}_k$ is used to update the weights.
 $$w_{k+1} = w_k - \alpha_k \nabla \tilde{f}_k(w_k)$$
 
-As SGD stochastically chooses a training example and performs gradient updates, on iteration $k$, the selected gradient $\nabla \tilde{f}_k$ for training example $x_k$ may very well be negatively correlated with another gradient term $\nabla f_j$ for example $x_j$. This negative correlation is said to have high \textit{gradient confusion}, a quantity introduced by Sankararaman, et al. \cite{impact}. \\
+As SGD stochastically chooses a training example and performs gradient updates, on iteration $k$, the selected gradient $\nabla \tilde{f}_k$ for training example $x_k$ may very well be negatively correlated with another gradient term $\nabla f_j$ for example $x_j$. This negative correlation is said to have high \textit{gradient confusion}, a quantity introduced by Sankararaman, et al. \cite{gradient_confusion}. \\
 
 More formally, a set of objective functions $\{f_i\}_{i \in [N]}$ is said to have a $\textit{gradient confusion bound}$ $\eta \geq 0$ if, for fixed $w \in \mathbb{R}^d$,
 
@@ -100,14 +103,13 @@ $$ \langle \nabla f_i(w), \nabla f_j(w) \rangle \geq -\eta, \;\; \forall i \not 
 
 That is, the inner product of the gradient vectors of every pair of unique loss functions is bounded by $-\eta$. Throughout the rest of this paper, we will use \textit{gradient confusion} to refer to the gradient inner product shown here.
 
-\subsection{Intuition}
 Intuitively, when we have a gradient confusion bound $-\eta$ that is positive, or a very small negative value, we say that there is ``low gradient confusion.'' This case would imply that an epoch of SGD over an entire dataset leads to faster training, because most of the gradient updates of the weights would have components that are aligned with each other. On the other hand, if gradient confusion bound $-\eta$ is a large negative value, we say there is ``high gradient confusion,'' which leads to slower training.
 
 In practice, in high dimensions, \textit{randomly-chosen vectors are nearly orthogonal with high probability} \cite{Milman}; so, we might reasonably expect the \textit{average} randomly-chosen set of training examples to have approximately orthogonal gradients, as long as the number of parameters is large, and the number of training data is small, in order to minimize the probability of encountering gradient confusion. 
 
 This may hold on expectation, but it is difficult to ensure low gradient confusion without more rigorous reasoning. We also do not have any guarantees that these gradient vectors will behave truly randomly over the course of the SGD algorithm. As such, we present general theories and guarantees of overparameterizing and batch-normalizing a network, as well as empirical experiments, in order to show that low gradient confusion indeed holds. This analysis would then concretely explain why training is sped up when these methods are employed, and also hopefully shed light into how methods can be designed in order to speed up training, which is an incredibly expensive task.
 
-\subsection{The effect of network layer width on gradient confusion}
+\subsection{Existing theory: Network layer width and gradient confusion}
 Consider a simple two-layer linear network $g(\textbf{x}) = \textbf{W}_1 \textbf{W}_0 \textbf{x}$, with $\textbf{x} \in \mathbb{R}^d$, $g(\textbf{x}) \in \mathbb{R}$, $\textbf{W}_1 \in \mathbb{R}^{l \times d}$, and $\textbf{W}_0 \in \mathbb{R}^{1 \times l}$. Also, suppose element $w_{ij} \stackrel{}{\sim} \text{Normal}(0, 1/l)$, $\forall w_{ij} \in \textbf{W}_0, \textbf{W}_1$, and also $x_i \in \textbf{x} \stackrel{}{\sim} \text{Normal}(0, 1/d)$. Chen, et al. \cite{chen} provides the following bounds for expected value and variance of the inner product:
 $$\mathbb{E}_{\textbf{W}, \textbf{x}}[\langle \nabla f_i, \nabla f_j \rangle] = \Theta(\frac{1}{l}), \;\; \forall x_i, x_j$$
 $$\text{var}_{\textbf{W}, \textbf{x}}(\langle \nabla f_i, \nabla f_j \rangle) \leq \mathbb{E}_{\mathbf{W}, \mathbf{x}} [||\nabla f_i||^2 ||\nabla f_j||]^2 = O(\frac{1}{l^2})$$
@@ -121,7 +123,8 @@ $$\text{var}_{\textbf{W}, \textbf{x}}(\langle \nabla f_i, \nabla f_j \rangle) \l
 
 This implies that width $l$ and gradient confusion have an inverse relationship. The proof can be found in the appendix of Chen, et al. \cite{chen}. The paper also showcases experiments of which we abbreviate here in Fig. \ref{fig:mean_inner_prod}, showcasing the relationship between network width and gradient confusion. They used a fully-connected 5-layer linear neural network of input dimension $d = 100$, where each layer took on the width specified in the graph. Both mean and variance of the gradient inner products decrease at a rate of $O(1/l)$, thus verifying the bounds above.
 
-We can now directly apply Chebyshev's inequality to their result in order to get our own more precise understanding of the implications behind these bounds:
+\subsection{A direct application of Chebyshev's inequality for a new expressive result.}
+We now directly apply Chebyshev's inequality to the provided expressions for expected value and variance of the gradient inner products in order to get a \textit{new} expression that more precisely captures the implications behind these bounds:
 $$\boxed{\mathbf{P}\left( \left\lvert \langle \nabla f_i, \nabla f_j \rangle - \Theta(\frac{1}{l}) \right\rvert \geq \epsilon  \right) \leq \frac{1}{\epsilon^2}O(\frac{1}{l^2}), \;\; \forall i \not = j \in [N]}$$
 As width $l$ of the middle layer is increased, terms $\Theta(1/l)$ and $O(1/l^2)$ approximate to zero. This shows that the probability of the inner product of any two gradients of the losses deviating greatly from zero is very small. That is, as the width increases, the gradient inner products concentrate more towards zero, and therefore become more deterministic; this deterministic behavior of gradients with width overparameterization agrees with the findings of other works \cite{oymak}, \cite{bassily}, \cite{SimonDu}.\\
 
@@ -136,13 +139,14 @@ The experiments shown by Sankararaman et al. \cite{gradient_confusion} in Fig. \
 
 As such, overparameterizing a network by increasing width certainly reduces gradient confusion, thus leading to faster training time. In order to precisely understand why this is the case from an optimization point of view, we dive deeper into work by S. Du, et al \cite{SimonDu}, which discusses how gradient descent can improve training and provably optimize overparameterized networks.
 
-\section{Over-parameterization}
-We survey previous research work on optimization and generalization of two-layer neural networks, which mainly focus on how they converge to global minimum and generalize in the over-parameterized setting. To investigate convergence guarantees to global minima, and study about speed of convergence, we focus on Paper \cite{SimonDu} by S.Du which talks about how over-parameterization causes the Gram matrix ($H(x)$) to remain positive-definite and hold a lower-bounded least-eigenvalue that guarantees the linear convergence to global minima. Soundry and Carmon \cite{SoudryCarmon} analyze the properties of differentiable local minima (DLMs) of the mean square error loss (MSE) for mild over-parameterization and guarantees zero training loss for single-hidden-layer and multiple-hidden-layer cases. Arora \cite{Arora} refines the analysis of Du \cite{SimonDu} by introducing larger widths, and proves why true labels will converge faster than random labels. 
+\section{Overparameterization}
+\subsection{Problem description: what is overparameterization?}
+We survey previous research work on optimization and generalization of two-layer neural networks, which mainly focus on how they converge to global minimum and generalize in the overparameterized setting -- a setting in which the number of parameters in a network is beyond the number of training data. To investigate convergence guarantees to global minima, and study about speed of convergence, we focus on a paper by Du \cite{SimonDu} which talks about how overparameterization causes the Gram matrix\footnote{Given a set $V$ of $m$ vectors (points in $R^n$), the Gram matrix $G$ is the matrix of all possible inner products of $V$, i.e. $G_{i j}=v_i^T v_j$.}  ($H(x)$) to remain positive-definite and hold a lower-bounded least-eigenvalue that guarantees the linear convergence to global minima. Soundry and Carmon \cite{SoudryCarmon} analyze the properties of differentiable local minima (DLMs) of the mean square error loss (MSE) for mild overparameterization and guarantees zero training loss for single-hidden-layer and multiple-hidden-layer cases. Arora \cite{Arora} refines the analysis of Du \cite{SimonDu} by introducing larger widths, and proves why true labels will converge faster than random labels. 
 %Arora also discusses generalization bounds; Weinan \cite{Weinan1} \cite{Weinan2} furthers the discussion on generalization bounds as well. 
 
-For experiments, we refer to Du \cite{SimonDu} by varying widths in order to prove that overparameterization can significantly improve the convergence rate, as well as other aspects. Then, we set up our own experiments to reproduce these results, as well as experiment with much more neurons to see whether these patterns hold from a different view. 
+For experiments, we refer to Du \cite{SimonDu} by varying widths in order to prove that overparameterization can significantly improve the convergence rate, and make the percentile of pattern and maximum distance from initialization of weights smaller. Then, we set up our own experiments to reproduce these results, as well as experiment with much more neurons to see whether these patterns still hold from a different view. 
 
-\subsection{Thoery}
+\subsection{Existing theoretical background}
 Du \cite{SimonDu} addresses that for any non-convex and non-smooth optimization objective function, and even with random labels, randomly-initialized first-order methods such as stochastic gradient descent are still guaranteed to converge to zero training loss and find global minimums.\\
 
 Du's theoretical work involves both continuous time analysis and discrete time analysis. We first focus on continuous time analysis to prove several key theorems. To set the foundation for discussion, first we define the concept of gradient flow, which represents gradient descent with infinitesimal steps. Formally, it is defined:
@@ -154,7 +158,7 @@ The main theorem for the convergence rate of gradient flow has four main assumpt
 \begin{itemize}
 \item No two inputs are parallel, and the Gram matrix $H(x)$ has a positive minimum eigenvalue.
 \item The data is scaled; that is, $\|x_i\|_{2} = 1$, and $|y_i|\leq C$. As noted, these assumptions are only for simplification purposes, and Du uses bounded labels to match most real-world data sets.  
-\item Over-parameterization holds for our model: $m=\Omega(\frac{n^6}{\lambda^4_0 \sigma^3})$.
+\item Overparameterization holds for our model: $m=\Omega(\frac{n^6}{\lambda^4_0 \sigma^3})$.
 \item Random initialization is used; namely, the elements of $W$ are initialized i.i.d. as $w_r\sim N(0,I)$, and $a_r \sim \text{Uniform}[{-1,1}]$.
 \end{itemize}
 
@@ -163,10 +167,10 @@ The main theorem for the convergence rate of gradient flow has four main assumpt
     $\|u(t)-y\|^2_2 \leq \text{exp}(-\lambda_0 t)\|u(0)-y\|^2_2$.
 \end{center}
 
-What this theorem shows is that, if $m$ is large enough, the training error will guaranteed converge to 0 at a linear rate. 
+What this theorem shows is that, if $m$ is large enough, the training error $u(t)$ will guaranteed converge to 0 at an exponential rate. 
 
-There are four main lemmas to prove this theorem. Firstly, with arc-consine kernels and law of the large numbers. 
-It is not hard to show that Gram matrix $H_{ij}(t)$ satisfies the function:
+There are four main lemmas to prove this theorem. Firstly, they utilize arc-consine kernels and the law of the large numbers. 
+It is not hard to show that elements of the Gram matrix $\mathbf{H(t)}=\{H_{ij}(t)\}$ satisfy the following function:
 \begin{center}
     $H_{ij}(t) = \frac{1}{m} x_i^T x_j\sum_{r=1}^{m}\Pi\left\{ x_i^T w_r(t)\geq 0,x_j^T w_r(t)\geq 0\right\}$
 \end{center}
@@ -174,7 +178,7 @@ If $m$ is large enough, the initial random state becomes approximately close to 
 \begin{center}
     $\frac{d u(t)}{dt} = H(t)(y-u(t)) \approx H^{\infty}(y-u(t))$
 \end{center}
-With these foundations addressed above, Lemma 1 by Du that shows $H(0)$ and $H^{\infty}$ are close due to the Law of Large Numbers, and that the least eigenvalue of $H(0)$ is lower-bounded with high probability. Lemma 2 makes a further step and points out that if weights $w_r(t)$ are stable, $H(t)$ becomes close to $H^{\infty}$ as well. Lemma 3 shows that, with the eigenvalue of $H(t)$ lower-bounded, the loss converges at a linear convergence rate, and the weights at $t$ become close to initialized weights. Lemma 4 expands Lemma 3 to a wider realm of $R$ to fit in all $t$. \\ 
+With these foundations addressed above, Lemma 1 by Du shows that $H(0)$ and $H^{\infty}$ are close due to the Law of Large Numbers, and that the least eigenvalue of $H(0)$ is lower-bounded with high probability. Lemma 2 makes a further step and points out that if weights $w_r(t)$ are stable, $H(t)$ becomes close to $H^{\infty}$ as well. Lemma 3 shows that, if the eigenvalue of $H(t)$ is lower-bounded, the loss converges at a exponential convergence rate, and the weights at $t$ become close to initialized weights. Lemma 4 expands Lemma 3 to a wider realm of $\mathbb{R}$ to fit in all $t$. \\ 
 
 Similar to continuous time analysis, discrete time analysis also comes to the conclusion that, with probability at least $1-\sigma$ over the initialization, we have 
 \begin{center}
@@ -188,28 +192,26 @@ Arora \cite{Arora} refines the analysis of Du \cite{SimonDu} by showing that wit
     $\|y-u(k)\|_2 = \sqrt{\sum_{i=1}^n (1-\eta\lambda_i)^{2k} (V_i^T y)^2}\pm\epsilon$
 \end{center}
 
-The theorem above shows how fast $(1-\eta\lambda_i)^{2k} (V_i^T y)^2$ converges to 0 as $k$ grows. When $k = 0$, it starts at $(V_i^T y)^2$. Then, it decreases at a rate of $(1-\eta\lambda_i)^{2k}$. The larger $(1-\eta\lambda_i)^{2k} (V_i^T y)^2$ is, the faster $\lambda_i$ decreases to 0.In that case, as label$y$ can be decomposed into its projection to $H^{\infty}$ 's all eigenvectors : $\|y\|_2^2 = \sum_{i=1}^n{(V_i^T y)^2}$. And as mentioned above, to achieve faster convergence, the projection of u onto top eigenvectors is expected to be larger.Based on this rule,
-for a set of labels $y$, true labels align with the top eigenvectors $(V_i^T y)^2$ is large, then gradient descent converges quickly. Random labels the projections of eigenvectors are uniform, gradient descent converges slow. \\
+The theorem above shows how fast $(1-\eta\lambda_i)^{2k} (V_i^T y)^2$ converges to 0 as $k$ grows. When $k = 0$, it starts at $(V_i^T y)^2$. Then, it decreases at a rate of $(1-\eta\lambda_i)^{2k}$. The larger $(1-\eta\lambda_i)^{2k} (V_i^T y)^2$ is, the faster $\lambda_i$ decreases to 0. In this case, as label $y$ can be decomposed into its projection to $H^{\infty}$ 's eigenvectors, we have that $\|y\|_2^2 = \sum_{i=1}^n{(V_i^T y)^2}$. And, as mentioned above, in order to achieve faster convergence, the projection of $u$ onto the top eigenvectors is expected to be larger. Based on this rule, for a set of labels $y$, if the amount that the true labels align with the top eigenvectors $(V_i^T y)^2$ is large, then gradient descent will converge quickly. With random labels, the projections of eigenvectors are uniform,  thus gradient descent converges rather slowly. \\
 
-\indent Different from Arora et al. \cite{Arora} and Du et al. \cite{SimonDu}, Soudry and Carmon \cite{SoudryCarmon} discuss the relationship between local and global minima. By analyzing the properties of differentiable local minima (DLMs) under mean squared error loss (MSE) and mild over-parameterization, they show a guarantee of zero training loss for the single-hidden-layer and multiple-hidden-layer cases. They prove convergence to global minima for both single-hidden-layer networks and multiple-hidden-layer networks. They define mean square error (MSE) as the following:
+\indent Different from Arora et al. \cite{Arora} and Du et al. \cite{SimonDu}, Soudry and Carmon \cite{SoudryCarmon} discuss the relationship between local and global minima. By analyzing the properties of differentiable local minima (DLMs) under mean squared error loss (MSE) and mild overparameterization, they show a guarantee of zero training loss for the single-hidden-layer and multiple-hidden-layer cases. They prove convergence to global minima for both single-hidden-layer networks and multiple-hidden-layer networks. They define mean square error (MSE) as the following:
 
 \begin{center}
     $\frac{1}{2}\hat{E}e^2 = \frac{1}{2}\hat{E}(y-W_2 \text{diag}(a_1)W_1x)^2 = \frac{1}{2}\hat{E}(y-a_1^T \text{diag}(w_2)W_1x)^2$
 \end{center}
 
-So for single hidden layer, assume $d$ is the width of the activation layer. $N$ represents the sample size. $\epsilon$ is Gaussian dropout noise. X is  smoothed by small Gaussian noise. Then the theorem can be addressed as:
-If $N< d_1 d_0$, then all differentiable local minima are global minima with $\text{MSE} = 0$, and $(X,\epsilon)$ almost everywhere. 
+For a single hidden layer, assume that $d$ is the width of the activation layer. Let $N$ represent the sample size let $\epsilon$ represent Gaussian dropout noise, and let $X$ be smoothed by some small Gaussian noise. Then, the theorem can be addressed as: \\\\
+``\textit{If $N< d_1 d_0$, then all differentiable local minima are global minima with $\text{MSE} = 0$, and $(X,\epsilon)$ almost everywhere.} ''
 
-Also, it can be proved the similar result to a general depth with multiple hidden layers.
-For any random set weights of the first $L-2$ layers, every DLM with respect to the weights of the last two layers is also a global minimum with loss zero. 
+Also, a similar result can be shown for any multiple-layer neural network with arbitrary depth. For any randomly-set weights of the first $L-2$ layers, every differentiable local minima (with respect to the weights of the last two layers) is also a global minimum with loss zero. 
 
 
-\subsection{Experiments}
+\subsection{Existing Experiments in Other Work}
 
 In Du's work \cite{SimonDu}, they perform experiments using synthetic data by uniformly-generating $n = 1000$ data points from a $d = 1000$-dimensional unit sphere, as well as labels from a one-dimensional standard Gaussian distribution. 
 They ran 100 epochs of gradient descent with different widths $m$. \\
 
-\pagebreak
+% \pagebreak
 Figure \ref{fig:conver} shows how different $m$ affects the convergence rates; as $m$ becomes lager, convergence rate improves.
 
 \begin{figure}[htb]
@@ -238,6 +240,8 @@ Figure \ref{fig:maxdistance} tests the relation between different m and maximum 
 
 So, it is generally the case that when $m$ becomes larger in an overparameterized network, convergence rates improve, thus agreeing with experiments from the gradient confusion paper by Sankararaman et al. \cite{gradient_confusion}. The percentiles of pattern changes, as well as maximum distances from initialization, also become smaller.
 \\
+
+\subsection{Our Own Experiments and Observations}
 
 We performed our own experiments referring to Du's result \cite{SimonDu}. Our experiment generates synthetic data, with $X$ being $n = 10$ randomly-generated data points of a $d = 1000$-dimensional unit sphere. It runs with $m = 100000$ neurons, and $y$ labels from a one-dimensional standard Gaussian distribution.
 
@@ -365,7 +369,7 @@ After studying the theory of overparameterizing as well as conducting experiment
 \label{label:BatchNorm}
 
 \subsection{Preliminaries and motivation}
-Before going into the process of batch normalization and understanding why it speeds training, we first reference experiments by Sankararaman et al. \cite{gradient_confusion} which shows how batch normalization actually lowers gradient confusion, just like overparameterization, thus accelerating training dramatically.
+For some motivation into why we should study batch normalization in the first place, we first reference experiments by Sankararaman et al. \cite{gradient_confusion} which show how batch normalization actually lowers gradient confusion, just like overparameterization, thus accelerating training dramatically.
 
 \begin{figure}[h]
 	\centering
@@ -374,12 +378,12 @@ Before going into the process of batch normalization and understanding why it sp
 	\label{fig:batchnorm}
 \end{figure}
 
-Here we see experiments that showcase the effects of batch normalization on gradient confusion, similar to those shown in Figure \ref{fig:grad_cosine_sim}; in fact, the results look very similar! Note that in these graphs, Sankararaman et al. also shows results for skip connections, which should be ignored, as they are out of the scope of this paper. In the left graph, the red plot shows how a non-batch-normalized network is much less efficient in terms of loss reduction over epochs in comparison to the green plot, which is of a batch-normalized network. The middle plot shows how the minimum gradient cosine similarities become more orthogonal with the introduction of batch normalization, thus causing training to become easier over epochs. In the rightmost graph, a histogram of pairwise gradient cosine similarities are shown, with a histogram of the non-batch-normalized network shown in red, and the batch-normalized network shown in green. We also notice from the rightmost graph that the batch-normalized network has very tightly-concentrated pairwise gradient cosine similarities, implying that the gradients of the network behave similarly to random vectors that are drawn from the unit sphere, causing optimization to become much more stable in the process.
+Here we see experiments that showcase the effects of batch normalization on gradient confusion, similar to those shown in Figure \ref{fig:grad_cosine_sim}; in fact, the results look very similar! Note that in these graphs, Sankararaman et al. also shows results for skip connections, which should be ignored, as they are out of the scope of this paper. In the left graph, the red plot shows how a non-batch-normalized network is much less efficient in terms of loss reduction over epochs in comparison to the green plot, which is of a batch-normalized network. The middle plot shows how the minimum gradient cosine similarities become more orthogonal with the introduction of batch normalization, thus causing training to become easier over epochs. In the rightmost graph, a histogram of pairwise gradient cosine similarities is shown, with a histogram of the non-batch-normalized network shown in red, and the batch-normalized network shown in green. We also notice from the rightmost graph that the batch-normalized network has very tightly-concentrated pairwise gradient cosine similarities, implying that the gradients of the network behave similarly to random vectors that are drawn from the unit sphere, causing optimization to become much more stable in the process.
 
 Now that we have experimentally convinced ourselves that batch normalization reduces gradient confusion and therefore enhances the efficiency of training, let us dive into the theory to gain a deeper understanding of what precisely causes this gradient confusion reduction.
 
-
-\subsection{Architecture of Batch Normalization}
+\subsection{Existing theory on Batch Normalization}
+\subsubsection{The Architecture of Batch Normalization}
 
 Ioffe \& Szegedy \cite{batchnorm} originally proposed adding batch normalization (BatchNorm) as part of their network architecture. The new BatchNorm network achieved the same accuracy as a state-of-the-art image classification model, while also training 14 times faster -- this is a remarkable improvement.
 
@@ -393,20 +397,19 @@ BatchNorm is an algorithm that is applied to each neuron individually, within a 
 	\label{fig:batchnorm}
 \end{figure}
 
-\subsection{Train with Batch Normalization}
-In an unnormalized network, for neuron $i$ at an arbitrary layer, we have that $z_i=w_ix$, and $a_i=g(z_i)$, where $x\in\mathbb{R}^{d\times m}$ is a mini-batch of size $m$, and  $d$-dimensional input into the neuron (it could be training data or output from previous layer) and $g$ is a non-linear activation function. So $z_i$ is vector of size $m$. Bias term $b$ and layer index is omitted for simplicity. BatchNorm is added in each neuron as the brown slice shown in Figure \ref{fig:batchnorm} before non-linear activation. On each individual neuron, we calculate:
-
+\subsubsection{Training with Batch Normalization}
+In an unnormalized network, for neuron $i$ at an arbitrary layer, we have that $z_i=w_ix$, and $a_i=g(z_i)$, where $x\in\mathbb{R}^{d\times m}$ is a size $m$ mini-batch of $d$-dimensional inputs into the next layer (thus, these inputs could either be input training data, or output from previous layer), and $g$ is a non-linear activation function. So, $z_i$ is vector of size $m$. In our discussion, the bias term $b$ and the layer indices are omitted for simplicity. BatchNorm is added to each neuron as the brown slice shown in Figure \ref{fig:batchnorm} before the non-linear activation. On each individual neuron, we then calculate:
 \begin{align*}
     z_i^{norm}& = \frac{z_i-\mu}{\sqrt{\sigma^2+\epsilon}}  &(1)\\
     \hat{z}_i&= \gamma_i\cdot z_i^{norm}+\beta_i  &(2)\\
     a_i&=g(\hat{z}_i) &(3)
 \end{align*}
 
-$\mu$ and $\sigma^2$ in equation (1) are mean and variance of the mini-batch $z_i$, respectively. They then scale and shift the normalized value $z_i^{norm}$ to ensure that not all transformed data fall under the linear regime of non-linear activation. In equation (2), $\gamma_i$ and $\beta_i$ are introduced learnable parameters to each neuron.  $\epsilon$ is added for numerical stability of the calculation (typical value is $10^{-8}$). Note that at each step of mini-batch training, the mean and variance of $z_i$ need to be recalculated.
+where $\mu$ and $\sigma^2$ in equation (1) above are the mean and variance of mini-batch $z_i$, respectively. They then scale and shift the normalized value $z_i^{norm}$ to ensure that not all transformed data fall under the linear regime of non-linear activation, as shown in equation (2). Here, $\gamma_i$ and $\beta_i$ are introduced as learnable parameters for each neuron.  $\epsilon$ is added for numerical stability of the calculation, i.e. to avoid errors if $\sigma \approx 0$ (the typical value for $\epsilon$ is $10^{-8}$). Note that at each step of mini-batch training, the mean and variance of $z_i$ need to be recalculated.
 
-\subsection{Gradient Descent of Batch Normalization}
+\subsubsection{Gradient Descent with Batch Normalization}
 
-During training phase, the chain rule is still applicable to a BatchNorm network. For an arbitrary loss function $l$, the chain rule is as follows:
+During the training phase, the chain rule is still applicable to a BatchNorm network. See here: for an arbitrary loss function $l$, the chain rule would be as follows:
 
 \begin{align*}
    \frac{\partial l}{\partial z_i^{norm}} &= \frac{\partial l}{\partial \hat{z}_i}\cdot\gamma_i\\
@@ -419,28 +422,26 @@ During training phase, the chain rule is still applicable to a BatchNorm network
 
 Therefore, we can still use backpropagation to update all the parameters in a BatchNorm neural network.
 
-\subsection{Inference with Batch Normalization}
+\subsubsection{Inference with Batch Normalization}
 
-Suppose the whole training data are split into $B$ mini-batches. When inference with BatchNorm network, deterministic mean and variance, $\mu$ and $\sigma^2$ in Eq. (1) independent of mini-batch are desired. To achieve a fixed mean and variance, once training is completed, with frozen parameters, the $B$ training mini-batches are re-processed through the trained network. Then for neuron $i$, the mean for mini-batch $k\in\{1,2,\cdots,B\}$ is denoted as $\mu_k$ and the variance as $\sigma^2_k$. Then let
-
+Suppose the whole training data is split into $B$ mini-batches. When inference is to be performed with a BatchNorm network, a deterministic mean and variance, $\mu$ and $\sigma^2$ in Eq. (1) (independent of the mini-batch) are desired. To achieve a fixed mean and variance, once training is completed, with frozen parameters, the $B$ training mini-batches are re-processed through the trained network. Then for neuron $i$, the mean for mini-batch $k\in\{1,2,\cdots,B\}$ is denoted as $\mu_k$ and the variance as $\sigma^2_k$. Then, let
 \begin{align*}
    M &= \frac{1}{B}\sum_{k=1}^B\mu_k\\
    V &= \frac{m}{m-1}\Bigg(\frac{1}{B}\sum_{k=1}^B\sigma^2_k\Bigg)\\
 \end{align*}
-
-, where $M$ is the average of the means of mini-batches and $V$ is unbiased estimate of the average variance of mini-batches. Therefore, when doing inference on test data, Eq. (1) is rewritten as:
+where $M$ is the average of the means of the mini-batches, and $V$ is an unbiased estimate of the average variance of the mini-batches. Therefore, when doing inference on test data, Eq. (1) is rewritten as:
 
 \begin{align*}
     z_i^{norm}& = \frac{z_i-M}{\sqrt{V+\epsilon}}
 \end{align*}
 
 
-\subsection{Loss-Landscape Smoothing} \label{landsmooth}
-In paper \cite{landscape} they show that landscape of loss function is smoother in BatchNorm network. BatchNorm reduces effective Lipschitzness constant and improve smoothness of the gradient.
+\subsubsection{Loss-Landscape Smoothing} \label{landsmooth}
+Santurkar et al. \cite{landscape} shows that the loss function landscape is smoother in BatchNorm networks. BatchNorm reduces the effective Lipschitzness constant and improves smoothness of the gradient. We discuss this in detail below.
 
-\subsubsection{Observations}
+\textbf{\subsubsubsection{Observations}}
 
-In this paper \cite{landscape}, they perform experiments with two deep architectures to observe, a VGG-type convolutional network with 11-19 layers (exact number of layers is not specified in the paper) on CIFAR10 dataset and a 25-layer deep linear network (DLN) on synthetic Gaussian data. They also explicitly add time-varying noise of non-zero mean and non-unit variance to each batch-normalized node independently (referred as "noisy" BatchNorm model in the paper) so that distribution of activation on each node in a mini-batch is ensured to be unstable. From the performance of VGG network, shown in Figure \ref{fig:vgg}, they observe BatchNorm and noisy BatchNorm have comparable performance, they both converge faster than standard "vanilla" network. However, Figure \ref{fig:vgg} shows that although "noisy" BatchNorm achieved faster training speed than standard "vanilla" network and comparable performance as BatchNorm, the weight distribution of "noisy" BatchNorm  is more noisy than the standard one which indicate a large ICS as defined in Ioffe \& Szegedy, 2015 \cite{batchnorm}. Also, notice that in Layer \#13 the weight distribution of BatchNorm has more ICS than standard network.
+In Santurkar et al.'s work \cite{landscape}, they perform experiments with two deep architectures: a VGG-type convolutional network with 11-19 layers (the exact number of layers is not specified in the paper) on the CIFAR10 dataset, and a 25-layer deep linear network (DLN) on synthetic Gaussian data. They also explicitly add time-varying noise of non-zero mean and non-unit-variance to each of the batch-normalized nodes independently (referred to as a "noisy" BatchNorm model in the paper) so that the distributions of activations on each node in a mini-batch is ensured to be unstable. From the performance of the VGG-type network, shown in Figure \ref{fig:vgg}, they observe that BatchNorm and noisy BatchNorm have comparable performance, and both converge faster than the standard ``vanilla'' network. However, Figure \ref{fig:vgg} shows that, although the ``noisy'' BatchNorm achieved faster training speed than the standard ``vanilla'' network, as well as comparable performance to that of BatchNorm, the weight distribution of the ``noisy'' BatchNorm  is noisier than the standard network, indicating a large ICS as defined in Ioffe \& Szegedy, 2015 \cite{batchnorm}. Also, notice that in Layer \#13, the weight distribution of BatchNorm has more ICS than the standard network.
 
 \begin{figure}[h] 
 	\centering
@@ -449,31 +450,11 @@ In this paper \cite{landscape}, they perform experiments with two deep architect
 	\label{fig:vgg}
 \end{figure}
 
-The above findings is hard to align with what is claimed in Ioffe \& Szegedy, 2015  \cite{batchnorm} that BatchNorm helps stabilize internal weight distribution so to reduce ICS. To investigate why is the case that BatchNorm improve training process, they analyze the optimization landscape in VGG networks and show it in Figure \ref{fig:optimizationlandscape}.
+The above findings seem to contradict Ioffe \& Szegedy's work \cite{batchnorm} where they claim that BatchNorm helps stabilize internal weight distributions so as to reduce ICS. To investigate why BatchNorm improves the training process, they analyze the optimization landscape in VGG-type networks and show it in Figure \ref{fig:optimizationlandscape}.
 
-\begin{comment}
-To further quantify the findings, a broader notation of ICS of activation i at time t is defined as $||G_{t,i}-G^{'}_{t,i}||_2$ in the paper (Santurkar, 2018), where
-\begin{align*}
-	G_{t,i}&=\nabla_{W_{i}^{(t)}}\mathcal{L}(W_{1}^{(t)},\cdots,W_{k}^{(t)};x^{(t)},y^{(t)})\\
-	G^{'}_{t,i}&=\nabla_{W_{i}^{(t)}}\mathcal{L}(W_{1}^{(t+1)},\cdots,
-	W_{i-1}^{(t+1)},W_{i}^{(t)},W_{i+1}^{(t)},\cdots,W_{k}^{(t)}
-	;x^{(t)},y^{(t)})
-\end{align*}
+\textbf{\subsubsubsection{Experimental and Theoretical Results}}
 
-In above definition, $W_{1}^{(t)},\cdots,W_{k}^{(t)}$ are weights of each of the $k$ layers at time $t$. $G_{t,i}$ is the gradient of the loss before applying any weights update and $G^{'}_{t,i}$ is the gradient after updating the first $i-1$ layers. So, $l_2$ difference of $G$ and $G'$ corresponds to the change in the optimization landscape of $W_i$ caused by its input change.
-
-\begin{figure} 
-	\centering
-    \includegraphics[width=\textwidth]{pics/batchNorm/Santurkar_fig7.jpg}
-	\caption{ICS}
-	\label{fig:ICSshift}
-\end{figure}
-
-Regardless of the difference in definition, they measure cosine angle (ideal value is 1) and $l_2$-difference (idea value is 0) of the gradients and plot it in Figure \ref{fig:ICSshift}. They claim that the figure shows that BatchNorm does not clearly improve ICS. DLN has even worse ICS with BatchNorm.
-\end{comment}
-
-\subsubsection{Theory Results}
-At each training step, suppose the weights is at position A of the optimization landscape, they calculate the gradient at position A, then they "walk" in the gradient direction of A and mark some positions along the way. In graph (a) of Figure \ref{fig:optimizationlandscape}, shaded area is the change in loss between A and each of the marked positions. In graph (b) the shaded area is $l_2$-difference of the gradient at A and the gradient at each of the marked positions. Graph (c) shows the maximum value of gradient difference (as $l_2$-norm) divided by distance from A to corresponding marked position. The maximum value can be seen as "effective" Lipschitz constant. It is evident that BatchNorm improves smoothness of the optimization landscape.
+At each training step, suppose the weights are at position $A$ of the optimization landscape. They calculate the gradient at position $A$, then ``walk'' in the gradient direction of $A$ and mark several positions along the way. In graph (a), of Figure \ref{fig:optimizationlandscape}, the shaded area is the change in loss between $A$ and each of the marked positions. In graph (b), the shaded area is the $l_2$-difference of the gradient at $A$ and the gradient at each of the marked positions. Graph (c) shows the maximum value of gradient difference (as the $l_2$-norm) divided by the distance from $A$ to the corresponding marked position. The maximum value can be seen as the ``effective'' Lipschitz constant. Through this graph, it is rather evident that BatchNorm improves smoothness of the optimization landscape.
 
 \begin{figure}[h]
 	\centering
@@ -482,46 +463,20 @@ At each training step, suppose the weights is at position A of the optimization 
 	\label{fig:optimizationlandscape}
 \end{figure}
 
-In following section, they analyze the phenomenon theoretically. In the theoretical setup, a single BatchNorm layer is arbitrarily inserted at a fully-connected layer. Layer weights are denoted as $W_{ij}$. An arbitrary unnormalized loss function at current layer as $\mathcal{L}$ and normalized loss $\hat{\mathcal{L}}$ that could have downstream non-linear layers. For input $x$ let $y=Wx$. $\hat{y}=\text{BN}(y)$ is batch-normalized $y$ that has mean 0 and variance 1. Then $z=\gamma\hat{y}+\beta$ where $\gamma$ and $\beta$ are assumed to be constant for the following analysis. 
+In the following section, the phenomenon is explored theoretically. In the theoretical setup, a single BatchNorm layer is arbitrarily inserted at a fully-connected layer. Layer weights are denoted as $W_{ij}$. An arbitrary unnormalized loss function at the current layer is denoted as $\mathcal{L}$, and the normalized loss is denoted $\hat{\mathcal{L}}$ (and they may have downstream non-linear layers). For some input $x$, let $y=Wx$. Then, we let $\hat{y}=\text{BN}(y)$, which is the batch-normalized $y$ with mean 0 and variance 1. Then, $z=\gamma\hat{y}+\beta$ where $\gamma$ and $\beta$ are assumed to be constant for the following analysis. 
 
 \textbf{Theorem 4.1} shows that BatchNorm improve Lipschitzness of the loss with respect to $y_j$.
-
 \begin{align*}
 	||\nabla_{y_j}\hat{\mathcal{L}}||^2&\leq\frac{\gamma^2}{\sigma^2_j}\bigg(||\nabla_{y_j}\mathcal{L}||^2
 	- \frac{1}{m} \langle \mathbf{1},\nabla_{y_j}\mathcal{L} \rangle^2 
-	- \frac{1}{m}\langle \nabla_{y_j}\mathcal{L}, \hat{y}_j \rangle^2 \bigg)\\
+	- \frac{1}{m}\langle \nabla_{y_j}\mathcal{L}, \hat{y}_j \rangle^2 \bigg)
 \end{align*}
 
-, where $\sigma_j^2$ is variance of a batch of outputs $y_j\in\mathrm{R}^m$ and $j$ denotes an arbitrary node in the normalized layer. 
+where $\sigma_j^2$ is the variance of a batch of outputs $y_j\in\mathrm{R}^m$, and $j$ denotes an arbitrary node in the normalized layer. 
 
-The value of $\sigma_j^2$ tends to be large in practice. The inequality utilizes an assumption that $\partial \hat{\mathcal{L}}/\partial z_j = \partial \mathcal{L}/\partial y_j$. The second term, $ \langle \mathbf{1},\nabla_{y_j}\mathcal{L} \rangle^2=\big( \sum_{k=1}^{m}\partial \mathcal{L}/\partial y_j^{(k)} \big)$, is non-negative and most likely greater than zero. The third term indicates correlation of variable $\hat{y}_j$ and $\nabla_{y_j}\mathcal{L}$. Since they both correlates to $y_j$, this term is also greater than zero. Therefore,  Lipschitzness of the loss with respect to $y_j$ is proved to be improved by BatchNorm.
+We gain intuition by reasoning about each term separately. Note that $||\nabla_{y_j} \mathcal{L}||$ here denotes the Lipschitzness of the loss. The value of $\sigma_j^2$ tends to be large in practice. The inequality utilizes an assumption that $\partial \hat{\mathcal{L}}/\partial z_j = \partial \mathcal{L}/\partial y_j$. The second term, $ \langle \mathbf{1},\nabla_{y_j}\mathcal{L} \rangle^2=\big( \sum_{k=1}^{m}\partial \mathcal{L}/\partial y_j^{(k)} \big)$, is non-negative and most likely greater than zero. The third term indicates the correlation of variable $\hat{y}_j$ and $\nabla_{y_j}\mathcal{L}$. Since they both correlate to $y_j$, this term is also greater than zero. Therefore, we can confidently say that the Lipschitzness of the loss with respect to $y_j$ is improved by BatchNorm.
 
-\begin{comment}
-Next they focus on the $2$nd-order properties of the loss landscape w.r.t $y_j$. Let $\mathbb{\textit{H}}_{jj}=\frac{\partial\mathcal{L} }{\partial y_j\partial y_j}$ and $\hat{g}_j = \nabla_{y_j}\mathcal{L}$ be the Hessian and gradient of the loss w.r.t. the layer outputs. They show that:
-
-\begin{align*}
-	\bigg(\nabla_{y_j}\hat{\mathcal{L}}\bigg)^T\frac{\partial \hat{\mathcal{L}}}{\partial y_j\partial y_j} \bigg(\nabla_{y_j}\hat{\mathcal{L}}\bigg) &\leq 
-	\frac{\gamma^2}{\sigma^2}\Bigg[
-	\bigg(\frac{\partial \hat{\mathcal{L}}}{\partial y_j}\bigg)^T\mathbb{\textit{H}}_{jj}\bigg(\frac{\partial \hat{\mathcal{L}}}{\partial y_j}\bigg) -
-	\frac{1}{m\gamma}\langle\hat{g}_j,\hat{y}_j\rangle\bigg|\bigg|\frac{\partial \hat{\mathcal{L}}}{\partial y_j}\bigg|\bigg|^2
-	\Bigg]\\
-\end{align*}
-
-If $\mathbb{\textit{H}}_{jj}$ preserves the relative norms of $\hat{g}_j$ and $\nabla_{y_j}\hat{\mathcal{L}}$,
-
-
-\begin{align*}
-	\bigg(\nabla_{y_j}\hat{\mathcal{L}}\bigg)^T\frac{\partial \hat{\mathcal{L}}}{\partial y_j\partial y_j} \bigg(\nabla_{y_j}\hat{\mathcal{L}}\bigg) &\leq 
-	\frac{\gamma^2}{\sigma^2}\Bigg(
-	\hat{g}_j^T \mathbb{\textit{H}}_{jj} \hat{g}_j -
-	\frac{1}{m\gamma}\langle\hat{g}_j,\hat{y}_j\rangle\bigg|\bigg|\frac{\partial \hat{\mathcal{L}}}{\partial y_j}\bigg|\bigg|^2
-	\Bigg)\\
-\end{align*}
-
-The above inequality holds true if it satisfies two conditions: 1. the loss is locally convex (it is true for deep network with piecewise-linear activation functions) so the Hessian is positive semi-definite. 2. Negative gradient $\hat{g}_j$ points to the minimum of the loss so the inner product $\langle\hat{g}_j,\hat{y}_j\rangle>0$. They claim that both conditions are fairly mild assumptions. The quadratic Hessian term is the second order term of the Taylor expansion of loss around the current position. When this term is reduced by BatchNorm, it is more accurate to predict the loss around the current position by using only the first order term.
-\end{comment}
-Next, in \textbf{Theorem 4.4}, they transfer the above theorem to one that relates to layer weights by using chain rule $\frac{\partial\hat{L}}{\partial W_{.j}}=\textbf{X}^T\big(\frac{\partial\hat{L}}{\partial y_{j}}\big)$. Let $g_j=\underset{||X||\leq\lambda}{\mathrm{max}}\big|\big|\nabla_{W_{\cdot j}}\mathcal{L}\big|\big|^2$, $\hat{g}_j=\underset{||X||\leq\lambda}{\mathrm{max}}\big|\big|\nabla_{W_{\cdot j}}\hat{\mathcal{L}}\big|\big|^2$ and $\mu_{g_j}=\frac{1}{m}\langle\mathbf{1},\partial\mathcal{L}/\partial y_j\rangle$ then
-
+Next, in \textbf{Theorem 4.4}, they transfer the above theorem to one that relates to layer weights, by using chain the rule $\frac{\partial\hat{L}}{\partial W_{.j}}=\textbf{X}^T\big(\frac{\partial\hat{L}}{\partial y_{j}}\big)$. Let $g_j=\underset{||X||\leq\lambda}{\mathrm{max}}\big|\big|\nabla_{W_{\cdot j}}\mathcal{L}\big|\big|^2$, $\hat{g}_j=\underset{||X||\leq\lambda}{\mathrm{max}}\big|\big|\nabla_{W_{\cdot j}}\hat{\mathcal{L}}\big|\big|^2$ and $\mu_{g_j}=\frac{1}{m}\langle\mathbf{1},\partial\mathcal{L}/\partial y_j\rangle$. Then,
 \begin{align*}
 	\hat{g}_j &\leq 
 	\frac{\gamma^2}{\sigma_j^2}\Bigg(
@@ -529,50 +484,38 @@ Next, in \textbf{Theorem 4.4}, they transfer the above theorem to one that relat
 	\Bigg)\\
 \end{align*}
 
-(Note that in original paper, $\lambda^2$ is missing in the second term and $1/m$ is missing in the third term.)
+(Note that in original paper, $\lambda^2$ is missing in the second term and $1/m$ is missing in the third term. We believe that this may be a mistake.)
 
-The above theorem shows that worst-case bound of the loss gradient w.r.t. layer weights also improves by applying BatchNorm.
+The above theorem shows that the worst-case bound of the loss gradient with respect to layer weights also improves by applying BatchNorm.
 
-\subsubsection{Discussion}
+\subsubsection{Batch Normalization: Length-direction decoupling}
 
-This paper both empirically and theoretically shows that optimization landscape of a layer having BatchNorm is smoother than that without BatchNorm. BatchNorm improves Lipschitzness of loss gradient in deep neural network. However, in this paper the proof is based on the assumption that $\partial\hat{\mathcal{L}}/\partial z_j = \partial\mathcal{L}/\partial y_j$. Although both $z_j$ and $y_j$ are pre-activations, further proof is still needed for this assumption. Moreover, even if the assumption is valid for network of one BatchNorm layer, it's highly possible that in a full BatchNorm network $\partial\hat{\mathcal{L}}/\partial z_j$ differs from  $\partial\mathcal{L}/\partial y_j$.
+Kohler et al.'s paper \cite{decoupling} shows that BatchNorm is equivalent to rewriting weights in a way that decouples its length and direction. Therefore, these two parameters of the weights can actually be trained separately.
 
-% Deep linear network is not discussed in original BatchNorm paper (Ioffe \& Szegedy, 2015), and properties of the simplified architecture of DLN is yet to fully studied. Therefore, this report will focus on the more practical architecture, VGG network.
-
-\subsection{BatchNorm-Length-direction decoupling}
-
-In paper \cite{decoupling} they show that BatchNorm is equivalent to rewrite weights in a way that decoupling its length and direction. Therefore, the two parameters of weights can be trained separately.
-
-Suppose for a binary classification problem, training data input $\textbf{x}\in\mathbb{R}^d$, label $y\in{\pm1}$. Let $\textbf{z}=-y\textbf{x}$, $\textbf{u}:=\mathbb{E}[\textbf{z}]$, $\textbf{S}:=\mathbb{E}[\textbf{xx}^T]$, $\textbf{w}$ is weight vector on an arbitrary unit on input x and $\varphi: \mathbb{R}\xrightarrow{}\mathbb{R}$ is non-linear function. Then output $f(\textbf{w})$ of an unit on an input \textbf{x} is:
-
+Suppose for a binary classification problem, the training data input is $\textbf{x}\in\mathbb{R}^d$, and the label is $y\in{\pm1}$. Let $\textbf{z}=-y\textbf{x}$, let $\textbf{u}:=\mathbb{E}[\textbf{z}]$, let $\textbf{S}:=\mathbb{E}[\textbf{xx}^T]$, let $\textbf{w}$ be a weight vector on an arbitrary unit on input \textbf{x}, and let $\varphi: \mathbb{R}\xrightarrow{}\mathbb{R}$ be a non-linear function. Then the output $f(\textbf{w})$ of a unit on an input \textbf{x} is:
 \begin{align*}
-	f(\textbf{w})=\mathbb{E}_{\textbf{x}}\big[\varphi\big(\textbf{x}^T\textbf{w}\big)\big]\\
+	f(\textbf{w})=\mathbb{E}_{\textbf{x}}\big[\varphi\big(\textbf{x}^T\textbf{w}\big)\big]
 \end{align*}
-
-When applied BatchNorm to the unit before activation, the output becomes:
-
+When we apply BatchNorm to the unit before activation, the output becomes:
 \begin{align*}
 	f_{BN}(\textbf{w},\gamma,g)&=\mathbb{E}_{\textbf{x}}\big[\varphi\big(BN\big(\textbf{x}^T\textbf{w}\big)\big)\big]\\
-	BN\big(\textbf{x}^T\textbf{w}\big)&=g\frac{\textbf{x}^T\textbf{w}-\mathbb{E}_{\textbf{x}}[\textbf{x}^T\textbf{w}]}{var_\textbf{x}[\textbf{x}^T\textbf{w}]^{1/2}}+\gamma\\
+	BN\big(\textbf{x}^T\textbf{w}\big)&=g\frac{\textbf{x}^T\textbf{w}-\mathbb{E}_{\textbf{x}}[\textbf{x}^T\textbf{w}]}{\text{var}_\textbf{x}[\textbf{x}^T\textbf{w}]^{1/2}}+\gamma
 \end{align*}
-Assume $\textbf{x}$ is zero mean and omit $\gamma$:
+Assume $\textbf{x}$ has zero mean and omit $\gamma$:
 \begin{align*}
 	f_{BN}(\textbf{w},g)&=\mathbb{E}_{\textbf{x}}\Big[\varphi\Big(g\frac{\textbf{x}^T\textbf{w}}{(\textbf{w}^T\textbf{Sw})^{1/2}}\Big)\Big]
 \end{align*}
-
-Let $||\textbf{w}||_{\textbf{S}}=(\textbf{w}^T\textbf{Sw})^{1/2}$ and define $\Tilde{\textbf{w}}:=g\frac{\textbf{w}}{||\textbf{w}||_{\textbf{S}}}$. Then we can write  $f_{BN}(\textbf{w},g)$ as:
-
+Now, let $||\textbf{w}||_{\textbf{S}}=(\textbf{w}^T\textbf{Sw})^{1/2}$ and define $\Tilde{\textbf{w}}:=g\frac{\textbf{w}}{||\textbf{w}||_{\textbf{S}}}$. Then we can write  $f_{BN}(\textbf{w},g)$ as:
 \begin{align*}
     f_{BN}(\textbf{w},g)&=\mathbb{E}_{\textbf{x}}\Big[\varphi\big(\textbf{x}^T\Tilde{\textbf{w}}\big)\Big]
 \end{align*}
+Therefore, BatchNorm can be seen as reparameterizing the weight space!
 
-Therefore, BatchNorm can be seen as reparameterizing the weight space.
+\textbf{\subsubsubsection{Theoretical Results}}
 
-\subsubsection{Theory Resuts}
+In this paper they make four assumptions for further theoretical analysis:
 
-In this paper they make four assumptions for later theoretical analysis:
-
-\textbf{Assumption 1}: $\mathbb{E}_{\textbf{x}}[\textbf{x}]=0$; minimum and maximum eigenvalues of $\textbf{S}$ are $\mu>0$ and $L<\infty$, respectively. Therefore, $\textbf{S}$ is positive-definite covariance matrix of $\textbf{x}$.
+\textbf{Assumption 1}: $\mathbb{E}_{\textbf{x}}[\textbf{x}]=0$; minimum and maximum eigenvalues of $\textbf{S}$ are $\mu>0$ and $L<\infty$, respectively. Therefore, $\textbf{S}$ is a positive-definite covariance matrix of $\textbf{x}$.
 
 \textbf{Assumption 2}: $\textbf{z}=-y\textbf{x}$ is a multivariate Gaussian random variable with mean $\textbf{u}$ and variance $\textbf{S}-\textbf{uu}^T$.
 
@@ -580,22 +523,19 @@ In this paper they make four assumptions for later theoretical analysis:
 
 \textbf{Assumption 4}: output function $f:\mathbb{R}^d\rightarrow{}\mathbb{R}$ is $\zeta$-smooth if it is differentiable on $\mathbb{R}$ and its gradient is $\zeta$-Lipschitz. Also, they assume that $\alpha_*:=\mathrm{argmin}_{\alpha}||\nabla f(\alpha\textbf{w})||^2$ exists and is finite for all $\textbf{w}$.
 
-Coming to the theoretical part, the architecture setup they use is a one hidden layer of $m$ neurons fully-connected neural network. For a loss function $l:\mathbb{R}\rightarrow{}\mathbb{R}^+$ and $F(\textbf{x},\Tilde{\textbf{W}}):=\sum_{i=1}^m\theta_i\varphi(\textbf{x}^T\Tilde{\textbf{w}}^{(i)})$ with all $\theta_i$ frozen. The goal is:
+The architecture setup they use for theoretical analysis is a one-hidden-layer network of $m$ neurons. The network has a loss function $l:\mathbb{R}\rightarrow{}\mathbb{R}^+$ and $F(\textbf{x},\Tilde{\textbf{W}}):=\sum_{i=1}^m\theta_i\varphi(\textbf{x}^T\Tilde{\textbf{w}}^{(i)})$ with all $\theta_i$ frozen. The goal here is:
 \begin{align*}
 \underset{\Tilde{\textbf{W}}}{\min}\Bigg(f_{NN}(\Tilde{\textbf{W}}):=\mathbb{E}_{y,\textbf{x}}\Big[l\Big(-yF(\textbf{x},\Tilde{\textbf{W}})\Big)\Big]\Bigg)
 \end{align*}
-
-In the paper an odd function, tanh, is used as activation function. Therefore, the above equation can be rewritten as:
+In the paper, an odd function, $\text{tanh}(x)$, is used as activation function. Therefore, the above equation can be rewritten as:
 \begin{align*}
 \underset{\Tilde{\textbf{W}}}{\min}\Bigg(f_{NN}(\Tilde{\textbf{W}})=\mathbb{E}_{\textbf{z}}\Big[l\Big(F(\textbf{z},\Tilde{\textbf{W}})\Big)\Big]\Bigg)
 \end{align*}
-
-They first show in \textbf{Lemma 2} that if Assumptions 1 \& 2 are true, then a critical point (local/global minimum) $\hat{\textbf{w}}^{(i)}$ for a hidden unit $i$ satisfies that $\forall i=1,\cdots,m$ and a scalar $\hat{c}^{(i)}$.
+They first show in \textbf{Lemma 2} that if Assumptions 1 \& 2 are true, then a critical point (local/global minimum) $\hat{\textbf{w}}^{(i)}$ for a hidden unit $i$ satisfies the following, $\forall i=1,\cdots,m$ and scalar $\hat{c}^{(i)}$:
 \begin{align*}
 \hat{\textbf{w}}^{(i)}=\hat{c}^{(i)}\textbf{S}^{-1}\textbf{u}
 \end{align*}
-The above lemma implies that given Gaussian inputs, critical points of all hidden neurons are along the same direction in $\mathbb{R}^d$ space. The scalar $\hat{c}^{(i)}$ depends on $\alpha, \beta$ and $\gamma$ given in later part. Furthermore, the direction of a critical point is only dependant on input into the layer. 
-
+The above lemma implies that, given Gaussian inputs, the critical points of all hidden neurons are along the same direction in $\mathbb{R}^d$ space. The scalar $\hat{c}^{(i)}$ depends on $\alpha, \beta$ and $\gamma$ given later. Furthermore, the direction of a critical point is only dependent on the input into the layer. 
 \begin{figure}[h]
 \begin{tabular}{cc}
   \includegraphics[scale=0.38]{pics/batchNorm/decoupling_alg1.jpg} & 
@@ -608,15 +548,15 @@ The above lemma implies that given Gaussian inputs, critical points of all hidde
 \caption{Training Algorithm}
 \label{fig:algorithms}
 \end{figure}
-
-Next, they propose a training algorithm for analysis purpose, shown in Figure \ref{fig:algorithms}. The algorithm optimizes each neuron independently and sequentially (in an order of given neuron indexes). The algorithm also leverages the above \textbf{Lemma 2} decoupling input and output of an unit. Then they prove that, if all four assumptions hold, by training with the proposed algorithm (GDNP), an exponential convergence rate can be achieved:
-
+Next, they propose a training algorithm for analysis purposes, shown in Figure \ref{fig:algorithms}. The algorithm optimizes each neuron independently and sequentially (in an order of given neuron indexes). The algorithm also leverages the above \textbf{Lemma 2}, decoupling input and output of a unit. Then they prove that, if all four assumptions hold, by training with the proposed algorithm (GDNP), an exponential convergence rate can be achieved.
 \begin{align*}
     ||\nabla_{\Tilde{\textbf{w}}^{(i)}}f\big(\Tilde{\textbf{w}}_t^{(i)}\big)||^2_{\textbf{S}^{-1}}&\leq(1-\mu/L)^{2t}C(\rho(\textbf{w}_0)-\rho(\textbf{w}^*))+2^{-T_s^{(i)}}\zeta|b_t^{(0)}-a_t^{(0)}|/\mu^2\\\\
     \mathrm{, where\ }\Tilde{\textbf{w}}:&=g\frac{\textbf{w}}{||\textbf{w}||_{\textbf{S}}} \mathrm{\ and\ step\ size\ } s_t^{(i)}=||\textbf{w}_i^{(i)}||^3_{\textbf{S}}/(L\theta^{(i)}g_t^{(i)}\xi_t\textbf{u}^T\textbf{w}_t^{(i)})\\
     \zeta\mathrm{\ is\ }&\mathrm{Lipschitz\ constant\ of\ }f\\\\
     C&=2\Phi^2+2i\sum_{j<i}(\theta^{(j)}c_j)^2>0\\
     \rho(\textbf{w}):&=-\frac{\textbf{w}^T\textbf{uu}^T\textbf{w}}{\textbf{w}^T\textbf{Sw}}\\\\
+\end{align*}
+\begin{align*}
     \xi_t&=\alpha_t^{(i)}+\sum_{j,i}\gamma_t^{(i,j)}c_j\\
     \alpha^{(i)}:&=\mathbb{E}_{\textbf{z}}\Big[l^{(1)}(F(\textbf{z},\Tilde{\textbf{W}}))\varphi^{(1)}(\textbf{z}^T\Tilde{\textbf{w}}^{(i)})\Big]-\sum_{j=1}^m\gamma^{(i,j)}(\textbf{u}^T\Tilde{\textbf{w}}^{(j)})\\
     \beta^{(i)}:&=\mathbb{E}_{\textbf{z}}\Big[l^{(1)}(F(\textbf{z},\Tilde{\textbf{W}}))\varphi^{(2)}(\textbf{z}^T\Tilde{\textbf{w}}^{(i)})\Big]\\
@@ -624,69 +564,52 @@ Next, they propose a training algorithm for analysis purpose, shown in Figure \r
     \Tilde{\textbf{W}}:&=\{\Tilde{\textbf{w}}^{(1)},\cdots,\Tilde{\textbf{w}}^{(m)}\}
 \end{align*}
 
-When updating current weight parameters $(\textbf{w}^{(i)}, g^{(i)})$, they further assume that all updated neurons weights, $\{\textbf{w}^{(k)}\}_{k<i}$, are at critical points and neurons to be updated all have weight $\textbf{w}^{(k)}=\textbf{0}$ for $k>i$.
+When updating the current weight parameters $(\textbf{w}^{(i)}, g^{(i)})$, they further assume that all updated neurons weights, $\{\textbf{w}^{(k)}\}_{k<i}$, are at critical points, and that the neurons to be updated all have weight $\textbf{w}^{(k)}=\textbf{0}$ for $k>i$.
 
-\begin{comment}
-Based on the fact that
-
-\begin{align*}
-    ||\nabla_{\Tilde{\textbf{w}}^{(i)}}f\big(\Tilde{\textbf{w}}_t^{(i)}\big)||^2_{\textbf{S}^{-1}} &= ||\textbf{w}_t^{(i)}||^2_{\textbf{S}}||\nabla_{\textbf{w}^{(i)}}f(\textbf{w}_t^{(i)},g^{(i)})||^2_{\textbf{S}^{-1}}/(g_t^{(i)})^2\\
-    &+\Big(\partial_{g^{(i)}}f(\textbf{w}_t^{(i)},g^{(i)}_{t})\Big)^2
-\end{align*}
-\end{comment}
-The above convergence result is actually a composition of two parts in below: convergence of scalar $g$ and the direction $\textbf{w}$. Note that both of the two parts have exponential convergence rate.
+The above convergence result is actually a composition of two parts in below: convergence of the scalar $g$, and the direction $\textbf{w}$. Note that both of the two parts have exponential convergence rate.
 
 \textbf{Convergence of scalar} $g^{(i)}$:
-
 \begin{align*}
     \Big(\partial_{g^{(i)}}f(\textbf{w}_t^{(i)},g^{(i)}_{T_s})\Big)^2\leq2^{-T_s^{(i)}}\zeta|b_t^{(0)}-a_t^{(0)}|/\mu^2
 \end{align*}
-
 \textbf{Convergence of the direction} $\textbf{w}^{(i)}$:
-
 \begin{align*}
     ||\textbf{w}_t^{(i)}||^2_{\textbf{S}}||\nabla_{\textbf{w}^{(i)}}f(\textbf{w}_t^{(i)},g_t^{(i)})||^2_{\textbf{S}^{-1}}\leq (1-\mu/L)^{2t}\xi_t^{2}g_t^{2}(\rho(\textbf{w}_0)-\rho(\textbf{w}^*))\\
 \end{align*}
 
-\subsubsection{Experiment}
+\textbf{\subsubsubsection{Experiments}}
 
-In the experiment section, they train a neuron network of 6 hidden layers with 50 neurons each on CIFAR-10 image classification data. Note that the input data is no longer multivariate-Gaussian variables. All hidden layers are batch-normalized. For comparison, they also train an un-normalized network of the same structure. Both networks are trained by standard gradient descent and use tanh as middle layers activation. To validate \textbf{Lemma 2} that direction of critical points is independent of downstream layers, they calculate Frobenius norm of $\frac{\partial^2f_{NN}}{\partial\textbf{W}_4\partial\textbf{W}_i}$ as a measurement of cross-dependency of layer-4 with other layer, layer-$i$. Their experimental results are shown in Figure \ref{fig:decouplingexperiment}. The top two graphs clearly shows that BatchNorm network do achieve faster convergence rate. Also, the bottom two graphs shows that in BatchNorm network, dependence of a middle layer on its downstream layers (layer-5 and layer-6) becomes weaker as the layer is further away from it.
+In the experimental section, they train a neural network of 6 hidden layers with 50 neurons, each on CIFAR-10 image classification data. Note that the input data are no longer multivariate-Gaussian variables. All hidden layers are batch-normalized. For comparison, they also train an un-normalized network of the same structure. Both networks are trained by standard gradient descent and use $\text{tanh}(x)$ as middle-layer activations. To validate \textbf{Lemma 2}, i.e. the direction of the critical points is independent of downstream layers, they calculate the Frobenius norm of $\frac{\partial^2f_{NN}}{\partial\textbf{W}_4\partial\textbf{W}_i}$ as a measurement of cross-dependency of layer-4 with the other layer, layer-$i$. Their experimental results are shown in Figure \ref{fig:decouplingexperiment}. The top two graphs clearly show that BatchNorm networks achieve faster convergence rates, agreeing with what was shown in the gradient confusion experiments for BatchNorm. Also, the bottom two graphs shows that in BatchNorm networks, dependence of a middle layer on its downstream layers (layer-5 and layer-6) grows weaker as the layer becomes further away from it.
 
 \begin{figure}[h]
 	\centering
     \includegraphics[scale=0.5]{pics/batchNorm/decoupling_experiment.jpg}
-	\caption{Experimental Results: Top two plots show the results of decay of loss function and norm of the loss gradient. Bottom two plots show cross-dependency in BatchNorm network and un-normalized network, respectively.}
+	\caption{Experimental Results: Top two plots show the results of the decay of the loss function as well as the norm of the loss gradient. Bottom two plots show cross-dependency in BatchNorm networks and un-normalized networks, respectively.}
 	\label{fig:decouplingexperiment}
 \end{figure}
 
-\subsubsection{Discussion}
+\subsubsection{Variants to Batch Normalization}
 
-As for the four assumptions, the first one is feasible when input data subtracted from its mean. Assumption 2 evidently does not always hold. However, in the experiment using non-Gaussian data, they show that the results are still valid. Assumption 3 is valid for tanh and sigmoid activations. ReLu is not differentiable at 0. However, the probability that a point is exactly zero is provable zero. Therefore, Assumption 3 is also feasible for the three enumerated popular activation functions. Last, validity of Assumption 4 is due to further proof. 
+\textbf{\subsubsubsection{Limitations of Batch Normalization}}
 
-\subsection{Variants to Batch Normalization}
+Although BatchNorm is a powerful technique that speeds up the training process, it still has its own limitations. The mean and variance of each neuron in BatchNorm depends on the size of each mini-batch, and thus varies from mini-batch to mini-batch. That would introduce certain amounts of errors that propagate through the network which is harmful to noise-sensitive applications like reinforcement learning \cite{reparameter}. Also, variance of the estimated population mean and variance is increased when the mini-batch size is small. Therefore, when applying BatchNorm, the choice of the mini-batch size should be considered carefully. Moreover, BatchNorm is not suitable for recurrent models like RNNs, which thus limits the applications of such powerful technique.
 
-\subsubsection{Limitations of Batch Normalization}
+\textbf{\subsubsubsection{Weight Normalization}}
 
-Although BatchNorm is a powerful technique that speed up training process, it still has its own limitations. The mean and variance of each neuron in BatchNorm depends on size of min-batch and vary from mini-batch to min-batch. That would introduce certain amount of errors and propagate through the network which is harmful to noise sensitive applications like reinforcement learning \cite{reparameter}. Also, variance of the estimated population mean and variance is increased when mini-batch size is small. Therefore, when applying BatchNorm, the choice of mini-batch size should be considered carefully. Moreover, BatchNorm is not suitable for recurrent model like RNNs which limits application of such powerful technique.
-
-\subsubsection{Weight Normalization}
-Paper \cite{reparameter} proposed Weight Normalization (WeightNorm), another way of neural network parameterization. In their paper, weight vector is expressed as:
-
+Salimans et al. \cite{reparameter} proposes Weight Normalization (WeightNorm), another way to perform neural network parameterization. In their paper, the weight vector is expressed as:
 \begin{align*}
     \textbf{w}=\frac{g}{||\textbf{v}||}\textbf{v}
 \end{align*}
-
-where $g$ is a scalar, $\textbf{v}$ is a vector and $||\textbf{v}||$ is $l_2$ norm of $\textbf{v}$. Gradient of loss function $l$  for a WeightNorm network with respect to the new parameters $g$ and $\textbf{v}$ is:
-
+where $g$ is a scalar, $\textbf{v}$ is a vector, and $||\textbf{v}||$ is the $L_2$ norm of $\textbf{v}$. The gradient of the loss function $l$ for a WeightNorm network, with respect to the new parameters $g$ and $\textbf{v}$, is:
 \begin{align*}
     \nabla_gl &= \frac{\nabla_{\textbf{w}}l\cdot\textbf{v}}{||\textbf{v}||}\\
     \nabla_{\textbf{v}}l &= \frac{g}{||\textbf{v}||}\nabla_{\textbf{w}}l-\frac{g\nabla_gl}{||\textbf{v}||^2}\textbf{v}
 \end{align*}
+They also propose a ``Mean-only'' Batch Normalization method, which they adopt into the WeightNorm method. In this scheme, the pre-activation $t=\textbf{W}\cdot\textbf{x}$ is subtracted from its mean (without being scaled by its standard deviation), then applied to a non-linear activation $y=\phi(t-\mu[t])$. The parameter $\textbf{w}$ is written as a WeightNorm expression. To give some intuition into what is happening, the ``Mean-only'' BatchNorm has an effect of centering the gradient, which is a low-cost operation. In their experiments, the ``Mean-only'' WeightNorm method achieves the lowest test error among WeightNorm, BatchNorm, and regular parameterization on a CNN network. They also apply regular WeightNorm to deep convolutional variantional auto-encoders (CVAEs), a recurrent variational autoencoder with generative model (DRAW), and a Deep Q-Network (DQN) for reinforcement learning. In all three models, WeightNorm outperforms normal parameterization in terms of both convergence rate and standard evaluation metrics.
 
-They also propose a "Mean-only" Batch Normalization adopted into the WeightNorm method by which pre-activation $t=\textbf{W}\cdot\textbf{x}$ is subtracted from its mean (without scaled by its standard deviation) then applied to non-linear activation $y=\phi(t-\mu[t])$. Parameter $\textbf{w}$ is written as WeightNorm expression. The "Mean-only" BatchNorm has an effect of centering gradient which is a low-cost operation. It their experiments, "Mean-only" WeightNorm achieves lowest test error among WeightNorm, BatchNorm and regular parameterization on a CNN network. They also apply regular WeightNorm to deep convolutional variantional auto-encoders (CVAEs), a recurrent variational autoencoder with generative model DRAW and  a Deep Q-Network (DQN) for reinforcement learning. In all three models, WeightNorm outperform normal parameterization in terms of both convergence rate and evaluation metric.
+\textbf{\subsubsubsection{Layer Normalization}}
 
-\subsubsection{Layer Normalization}
-Paper \cite{layernorm} propose Layer Normalization (LayerNorm) that can be applied to recurrent-type network. Figure \ref{fig:batchvslayernorm} shows a comparison of BatchNorm and LayerNorm.  In an arbitrary layer, LayerNorm is applied on each input independently. 
+Although vanilla BatchNorm does not apply to recurrent models, not all hope is lost for more complex recurrent structures. Ba et al. \cite{layernorm} proposed a reformulation for RNNs called Layer Normalization (LayerNorm) which can be applied to networks with recurrent structures. Figure \ref{fig:batchvslayernorm} shows a comparison of BatchNorm and LayerNorm.  In an arbitrary layer, LayerNorm is applied to each input independently. 
 
 \begin{figure}[h]
 	\centering
@@ -695,7 +618,7 @@ Paper \cite{layernorm} propose Layer Normalization (LayerNorm) that can be appli
 	\label{fig:batchvslayernorm}
 \end{figure}
 
-In a standard RNN, at time-step $t$ suppose current input $\textbf{x}^t$ and previous hidden state output $\textbf{h}^{t-1}$, let $\textbf{a}^t \in \mathbb{R}^K = W_{hh}\textbf{h}^{t-1}+W_{xh}\textbf{x}^t$, then output $\textbf{h}^t$ can be expressed as:
+In a standard RNN, at timestep $t$, with current input $\textbf{x}^t$ and previous hidden state output $\textbf{h}^{t-1}$, let $\textbf{a}^t \in \mathbb{R}^K = W_{hh}\textbf{h}^{t-1}+W_{xh}\textbf{x}^t$. Then, the output $\textbf{h}^t$ can be expressed as:
 
 \begin{align*}
     \textbf{h}^t&=\sigma\Big(\frac{\textbf{g}}{\sigma^t}\odot(\textbf{a}^t - \mu^t) + \textbf{b}\Big)\\
@@ -703,22 +626,22 @@ In a standard RNN, at time-step $t$ suppose current input $\textbf{x}^t$ and pre
     \sigma^t&=\sqrt{\frac{1}{K}\sum_{i=1}^K(a_i^t-\mu^t)^2}
 \end{align*}
 
-They test with layer normalization on 5 tasks implementing RNNs. All 5 tasks converge faster than baseline model with at least comparable results (LayerNorm perform better on 3 of the 5 tasks).
+This model incorporates a similar idea to BatchNorm, but its expression expands to recurrent network updates. They tested this layer normalization on five tasks involving RNNs. Experimentally, all five tasks converged faster than baseline models with at least comparable results (LayerNorm perform better on three of the five tasks).
 
-\subsubsection{Group Normalization}
+\textbf{\subsubsubsection{Group Normalization}}
 
-Small mini-batch size rapidly increases BatchNorm’s error due to inaccurate estimation of statistics. Thus, applying BatchNorm in large memory-consuming models such as computer vision tasks is limited especially for image detection, segmentation, and video classification. 
+Small mini-batch sizes rapidly increase BatchNorm's errors due to inaccurate estimations of population estimation statistics caused by smaller sample sizes. Thus, applying BatchNorm in large memory-consuming models that require smaller mini-batches (such as those present in computer vision tasks) is very limited, especially for image detection, segmentation, and video classification. 
 
-Paper \cite{groupnorm} propose Group Normalization (GroupNorm) which is independent of mini-batch size to address this issue. Implementation of GroupNorm is shown in Figure \ref{fig:groupnorm}. Calculation of the mean and variance is on each individual input across entire height and width of subset of channels in a layer. The formulation is in the same form as BatchNorm with the difference is the terms that being summed over. 
+Wu et al. \cite{groupnorm} tackled this weakness with the introduction of Group Normalization (GroupNorm), which is a method completely independent of mini-batch size. Implementation of GroupNorm is shown in Figure \ref{fig:groupnorm}. Calculation of the mean and variance is done on each individual input across the entire height and width of a subset of channels in a layer. The formulation is the same form as BatchNorm, the difference being which terms the sum is being done over.
 
 \begin{figure}[h]
 	\centering
     \includegraphics[scale=0.7]{pics/batchNorm/GroupNorm.jpg}
-	\caption{Group Normalization: N - Mini-batch size; C - number of channels, H,W - height \& width of a feature map being flatten. Normalization is taken over the blue region.}
+	\caption{Group Normalization: $N$ - Mini-batch size; $C$ - number of channels; $H$, $W$ - height \& width of a feature map being flattened. Normalization is taken over the blue region.}
 	\label{fig:groupnorm}
 \end{figure}
 
-Figure \ref{fig:resnet} shows the dependence of BatchNorm's performance on mini-batch size while GroupNorm doesn't have such dependence. The performance of GroupNorm is comparable as BatchNorm with larger mini-batch sizes. As for number of channels per group, they show that in ResNet-50 performance are well for all values that are studied from 2 to 64. The value can also vary from layer to layer which is another flexibility of GroupNorm.
+Figure \ref{fig:resnet} showcases how BatchNorm's performance is dependent on mini-batch size, while GroupNorm is not. The performance of GroupNorm is comparable to that of BatchNorm with larger mini-batch sizes. As for the number of channels per group, they show that in ResNet-50, all values from 2 to 64 have high performance. The value can also vary from layer to layer, which is another desirable flexibility of GroupNorm.
 
 \begin{figure}[h]
 	\centering
@@ -727,8 +650,9 @@ Figure \ref{fig:resnet} shows the dependence of BatchNorm's performance on mini-
 	\label{fig:resnet}
 \end{figure}
 
-\subsubsection{Summary}
-Table~\ref{normsum} shows a summary of all mentioned normalization methods along with their applications and way of calculation.\\
+\textbf{\subsubsubsection{Summary}}
+
+Table~\ref{normsum} shows a summary of all the mentioned normalization methods, along with their applications and calculation schemes.\\
 
 \begingroup
 \setlength{\tabcolsep}{10pt} % Default value: 6pt
@@ -745,7 +669,7 @@ Table~\ref{normsum} shows a summary of all mentioned normalization methods along
  \hline
  Group Normalization & Convolution Layers & Individual Input, over entire height \& weight in a group of channels\\[0.5ex]
  \hline
- Weight Normalization & Any Architecture & Decouple length and direction of weights\\
+ Weight Normalization & Any Architecture & Decouples length and direction of weights\\
  \hline
 \end{tabular}
 \caption{Summary of Normalization}
@@ -754,32 +678,47 @@ Table~\ref{normsum} shows a summary of all mentioned normalization methods along
 \endgroup
 
 \subsection{Our Own Experiments}
-The experiment conducted is a 7-layer fully connected feed-forward network with 32-64-32 neurons in each hidden layer. Output layer is a softmax layer of 10 neurons. Dataset is fashion-mnist, $28\times28$ grey scale pictures of 10 categories. BatchNorm is added to all seven hidden layers as our BatchNorm network. Mini-batch size is set to 32.
+The experiment we conducted was performed on a 7-layer fully-connected feed-forward network with 32-64-32 neurons in each hidden layer. The output layer was a softmax layer of 10 neurons, for classification. The dataset we used was Fashion-MNIST by Xiao et al. \cite{fmnist}, which is comprised of $28\times28$ pixel gray-scale images of 10 clothing categories. BatchNorm was added to all seven hidden layers. Lastly, the mini-batch size was set to 32.
 
-Note that we add BatchNorm to all fully-connected layers. In contrast to Section \ref{landsmooth} using single BatchNorm layer, we'd like to verify weather Lipschitzness of the loss landscape is improved by when applying BatchNorm in a more practical way. We plot the maximum loss gradient norm among batches with respect to the a node in middle layer and show it in Figure \ref{fig:maxgradient}. We experiment on Relu and Tanh activation function. Learning rate is set to 0.001 and 0.005 for each choice of activation. When learning rate is 0.001, BatchNorm networks achieve comparable test accuracy as regular network above 0.8. With learning rate 0.005 and Relu activation, test accuracy in BatchNorm network is 1\% higher than regular network (85.23\% vs. 84.26\%). Regular network using Tanh activation fails training at learning rate 0.005. 
+Note that we added BatchNorm to all fully-connected layers. In contrast to Section \ref{landsmooth} using only a single BatchNorm layer, we sought to verify whether Lipschitzness of the loss landscape is improved when applying BatchNorm in a more practical way. We plotted the maximum loss gradient norm among batches with respect to one node in one of the middle layers, and we showcase our results in Figure \ref{fig:maxgradient}. The RELU and $\text{tanh}(x)$ activation functions were used in our experiment. The learning rate was set to 0.001 and 0.005 for each choice of activation. When the learning rate was set to 0.001, BatchNorm networks achieved comparable test accuracy as regular networks, just above 80\%. With learning rate was set to 0.005 with RELU activation, the test accuracy in the BatchNorm network was 1\% higher than the regular network (85.23\% vs. 84.26\%). Regular network using $\text{tanh}(x)$ activation failed to train at all with a learning rate of 0.005.
 
-Regardless of the test results, we note that  when learning rate is small (0.001) the gradient norm is not always smaller than that in regular network,. However, when taking larger learning rate (0.005), it's evident that gradient norm of BatchNorm is much smaller than regular network and the change of gradient norm with training epochs is much smoother.
+Given these test results, we note that when the learning rate is small (0.001), the gradient norm of the two networks has a similar landscape. However, when taking a larger learning rate (0.005), the gradient norm in BatchNorm network is smaller than that of regular networks. Also, the change of the gradient norm in BatchNorm network with training epochs is much smoother.
 
 
 \begin{figure}[h]
 \begin{tabular}{cc}
   \includegraphics[scale=0.28]{pics/batchNorm/BatchNorm_relu_1.jpg} &
-  \includegraphics[scale=0.32]{pics/batchNorm/BatchNorm_relu_5.jpg}
+  \includegraphics[scale=0.31]{pics/batchNorm/BatchNorm_relu_5.jpg}
   \\
   (1) Learning Rate=1e-3, Relu & (2) Learning Rate=5e-3, Relu\\[6pt]
   \includegraphics[scale=0.3]{pics/batchNorm/BatchNorm_tanh_1.jpg} &
-  \includegraphics[scale=0.3]{pics/batchNorm/BatchNorm_tanh_5.jpg}\\
+  \includegraphics[scale=0.31]{pics/batchNorm/BatchNorm_tanh_5.jpg}\\
   (3) Learning Rate=1e-3, Tanh & (4) Learning Rate=5e-3, Tanh\\[6pt]
 \end{tabular}
-\caption{Maximum gradient norm among batches w.r.t. $W$ in last dense layer. Legend in each graph shows if BatchNorm is applied in the network, learning rate, weight initialization method and activation function. The same random seed for weight initialization is used across all runs to ensure a better control of the experiments.}
+\caption{Maximum gradient norm among batches w.r.t. one node in the middle layer. Legend in each graph shows whether BatchNorm is applied in the network, what learning rate is used, as well as which activation function. The same random seed for weight initialization is used across all runs.}
 \label{fig:maxgradient}
 \end{figure}
 
-Looking again at the theory setup in Section \ref{landsmooth}, notice that output of a neuron is $y=Wx$ which omits non-linear activation function. However, if Relu is used as activation function, it can be seen as a linear calculation on positive $Wx$. For negative $Wx$, the gradient on the corresponding $W$ is zero, so those weights will not contribute to norm calculation. Therefore, gradient norm in a Relu layer is expected to satisfy \textbf{Theorem 4.4} . This conjecture can be verified on the top two graphs of Figure \ref{fig:maxgradient}. 
 
-On the other hand, Tanh activation function can not be seen as a linear calculation. Its derivative is more complicated, therefore we cannot compare the gradient norm of a Tanh network with a linear network. It's an explanation that the behaviour of the bottom two graphs does not align with the theory.
+\section{Discussion}
+\subsection{Gradient Confusion}
+Gradient confusion is a great quantity to start off with when trying study what methods result in faster, more effective training. Both overparameterized and batch-normalized networks had low gradient confusion, and we were able to justify this through papers outlining rich theoretical reasonings in both cases. The paper by Sankararaman (and other papers related to gradient confusion and other related quantities such as ``gradient diversity'' as introduced by Yin et al \cite{yin}) does not (yet), however, provide any relationships or bounds between gradient confusion and multilayer nonlinear networks; more work should be done in this front, as well as experimentation.
 
-Another observation is that the training time of BatchNorm network is twice as much as the regular network. When training a high-capacity network, since it's been observed in other papers' experiments that BatchNorm reduces the training epochs by a factor much larger than 2, the overall training speed is expected to be effectively improved by BatchNorm.
+\subsection{Overparameterization}
+As shown, overparameterized networks with large widths ($m$) can be regarded as kernel functions. In this paper, we gave strong emphasis on the convergence of gradient descent to global minima in training, both theoretically and experimentally. However, there are still some other aspects which we could have dug into further. For example, Du's\cite{SimonDu} paper argues that the convergence approach can be used for deeper neural networks as well. Arora's \cite{Arora} paper also seems to suggest this. However, Soudry and Carmon's \cite{SoudryCarmon} work seems to show that for multi-layer neural networks, there is no global convergence. Currently, there is not much proof as to whether convergence to global minima would work for multi-layer networks. Another aspect that is relatively obvious (but profound) in this discussion is that in our study of overparameterization, width $m$ has been required to be magnitudes larger than the training set size $n$. In reality, for training neural networks on large training sets (where, nowadays, several datasets range in size on the order of millions), it would be interesting to see what kind of guarantees can be made with smaller $m$. Moreover, our discussion on convergence has been primarily within the training stage, not the testing stage. As to serve the needs of minimizing the population risk, generation bounds would be a good concept to consider for overparameterization as well. 
+
+
+\subsection{BatchNorm}
+Santurkar et al.'s paper \cite{landscape} both empirically and theoretically shows that the optimization landscape of a layer with BatchNorm is smoother than that without BatchNorm. BatchNorm was proven to improve Lipschitzness of loss gradients in deep neural networks. However, in this paper, the proof is based on the somewhat restrictive assumption that $\partial\hat{\mathcal{L}}/\partial z_j = \partial\mathcal{L}/\partial y_j$. Although both $z_j$ and $y_j$ are pre-activations, further justification is needed to make such an assumption. Moreover, even if the assumption is valid for a network with one BatchNorm layer, it's highly likely that in a full BatchNorm network (where BatchNorm is added to all hidden layers) $\partial\hat{\mathcal{L}}/\partial z_j$ differs from $\partial\mathcal{L}/\partial y_j$.
+
+We also question the restrictiveness of the four assumptions made in Kohler et al.'s paper \cite{decoupling}. The first assumption is feasible when the input data is subtracted from its mean. Assumption 2 evidently does not always hold; however, in their experiment using non-Gaussian data, they still are able to show that the results are valid. Assumption 3 is valid for tanh and sigmoid activations; in contrast, RELU is not differentiable at 0. However, the probability that a point is exactly zero is provably zero. Therefore, Assumption 3 is also feasible for the three enumerated popular activation functions we have mentioned. Last, the validity of Assumption 4 is due to further proof. 
+
+In addition, we extended the loss landscape experiment to a full BatchNorm network. By checking the shape of the gradient norm change over each epoch at one node with different learning rates, our results imply that when training BatchNorm network, one should be confident to take larger learning rate. Large learning rates ensure smoother loss changes over epochs, as well as sounder test accuracies.
+
+Another observation is that the training time of BatchNorm network is two to three times as much as that of the regular network. Since experiments in other papers have observed that BatchNorm reduces the number of needed training epochs by a factor larger than three, when training a high-capacity network, the overall training speed is expected to be accelerated by BatchNorm.
+
+\section{Conclusion}
+In this paper, we gave a complete survey of theoretical and empirical analyses of overparameterization, batch normalization, and their effects on gradient confusion, which has a direct correlation on training speed. We first introduced the idea of \textbf{gradient confusion}, as well as existent theoretical background that shows precisely why overparameterizing a network by increasing width leads to lowering gradient confusion and thus speeding up training. We gave a new, concise expression that captures the relationship between width and gradient confusion by directly applying Chebyshev's inequality. Next, we transitioned into the theory of \textbf{overparameterization}, and explored convergence guarantees to global minima in training of overparameterized networks. We showed how gradient descent can converge more quickly within the overparameterization context, and we also precisely defined what distinguishes local and global minima in this case. We discussed existing experiments, and we also discussed how we conducted our own experiments in order to verify results of other papers. Lastly we discussed \textbf{batch normalization}. We started with a discussion of how batch normalization empirically affects gradient confusion, thus speeding up training. Next, we defined how the BatchNorm mechanism works in inference. Then, we tackled batch normalization from a theoretical perspective at multiple angles. We discussed how the loss landscape is smoother for networks that have BathNorm layers. We went into detail about how BatchNorm is equivalent to rewriting weights of a network in such a way that decouples length and direction. We highlighted the limitations of BatchNorm, and how these limitations have been addressed in recent research (WeightNorm, LayerNorm, and GroupNorm). Finally, we included our own experiments with many more learning rate and activation function combinations in order to not only verify the theoretical results, but also to show how the gradient norms smoothened in BatchNorm networks, and how gradient norms overall became smaller, specifically in the case of larger learning rates.
 
 \newpage
 
@@ -788,60 +727,61 @@ Another observation is that the training time of BatchNorm network is twice as m
 \small
 
 \begin{thebibliography}{9}
-\bibitem{batchnorm} 
-S. Ioffe \& C. Szegedy (2015) Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift \textit{ICML}
- 
-\bibitem{landscape} 
-S. Santurkar, D. Tsipras, A.Ilyas \& A. Madry (2018) How Does Batch Normalization Help Optimization? \textit{32nd Conference on In NeurIPS}
-
-\bibitem{dln} 
-A. M. Saxe, J. Mcclelland \& S. Ganguli (2014). Exact solutions to the nonlinear dynamics of learning in deep linear neural networks.
- 
-\bibitem{decoupling} 
-J. Kohler, H. Daneshmand, A. Lucchi et. al. (2019) Exponential convergence rates for Batch Normalization:The power of length-direction decoupling in non-convex optimization. 	\textit{Proceedings of Machine Learning Research, PMLR 89:806-815.}
-
-\bibitem{reparameter}
-T. Salimans \& D.P. Kingma. (2016) Weight normalization: A simple reparameterization to accelerate
-training of deep neural networks. \textit{In Advances in Neural Information Processing Systems (NIPS)}.
+\bibitem{Arora}
+S.Arora, Simon S.Du, W.Hu ,Z.Li.,R.Wang(2019).\textit{Fine-Grained Analysis of Optimization and Generalization for Overparameterized Two-Layer Neural Networks}
 
 \bibitem{layernorm}
 J.L. Ba, J.R Kiros \& G.E Hinton (2016) Layer Normalization. \textit{arXiv:1607.06450}
 
-\bibitem{groupnorm}
-Y. Wu \& K. He (2018) Group Normalization \textit{European Conference on Computer Vision (ECCV)}
-
-\bibitem{Milman}
-Milman, V. D., \& Schechtman, G. (2009). \textit{Asymptotic theory of finite dimensional normed spaces: Isoperimetric inequalities in Riemannian manifolds} (Vol. 1200). Springer.
+\bibitem{bassily}
+Bassily, R., Belkin, M., \& Ma, S. (2018). \textit{On exponential convergence of SGD in non-convex over-parametrized learning}. arXiv preprint arXiv:1811.02564.
 
 \bibitem{chen}
 Chen, L., Wang, H., Zhao, J., Papailiopoulos, D., \& Koutris, P. (2018). \textit{The effect of network width on the performance of large-batch }. In Advances in Neural Information Processing Systems (pp. 9302-9309).
 
-\bibitem{dong}
-Yin, D., Pananjady, A., Lam, M., Papailiopoulos, D., Ramchandran, K., \& Bartlett, P. (2017). \textit{Gradient diversity: a key ingredient for scalable distributed learning}. arXiv preprint arXiv:1706.05699.
-
 \bibitem{SimonDu}
 Simon S.Du,X.Zhai.,B. Poczos.,A.Singh.(2019).\textit{Gradient Descent Provably Optimizes Over-parameterized Neural Networks}
 
-\bibitem{Arora}
-S.Arora, Simon S.Du, W.Hu ,Z.Li.,R.Wang(2019).\textit{Fine-Grained Analysis of Optimization and Generalization for Overparameterized Two-Layer Neural Networks}
+\bibitem{batchnorm} 
+S. Ioffe \& C. Szegedy (2015) Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift \textit{ICML}
+
+\bibitem{decoupling} 
+J. Kohler, H. Daneshmand, A. Lucchi et. al. (2019) Exponential convergence rates for Batch Normalization:The power of length-direction decoupling in non-convex optimization. 	\textit{Proceedings of Machine Learning Research, PMLR 89:806-815.}
+
+\bibitem{Milman}
+Milman, V. D., \& Schechtman, G. (2009). \textit{Asymptotic theory of finite dimensional normed spaces: Isoperimetric inequalities in Riemannian manifolds} (Vol. 1200). Springer.
+
+\bibitem{oymak}
+Oymak, S., \& Soltanolkotabi, M. (2018). Overparameterized Nonlinear Learning: Gradient Descent Takes the Shortest Path?. arXiv preprint arXiv:1812.10004.
+ 
+\bibitem{reparameter}
+T. Salimans \& D.P. Kingma. (2016) Weight normalization: A simple reparameterization to accelerate
+training of deep neural networks. \textit{In Advances in Neural Information Processing Systems (NIPS)}.
+
+\bibitem{gradient_confusion}
+Sankararaman, K. A., De, S., Xu, Z., Huang, W. R., \& Goldstein, T. (2019). \textit{The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent}. arXiv preprint arXiv:1904.06963.
+
+\bibitem{landscape} 
+S. Santurkar, D. Tsipras, A.Ilyas \& A. Madry (2018) How Does Batch Normalization Help Optimization? \textit{32nd Conference on In NeurIPS}
 
 \bibitem{SoudryCarmon}
 D.Soudry, Y.Carmon(2016).\textit{No bad local minima:Data independent training error guarantees for multilayer neural networks}
 
-\bibitem{Weinan1}
-Weinan.E, Chao M.,Lei W.(2019).\textit{A Priori Estimates For Two-layer Neural Networks}
-
 \bibitem{Weinan2}
 Weinan.E, Chao M.,Lei W.(2019).\textit{A Comparative Analysis of the Optimization and Generalization Property of Two-layer Neural Network and Random Feature Models Under Gradient Descent Dynamics}
 
-\bibitem{oymak}
-Oymak, S., \& Soltanolkotabi, M. (2018). Overparameterized Nonlinear Learning: Gradient Descent Takes the Shortest Path?. arXiv preprint arXiv:1812.10004.
+\bibitem{Weinan1}
+Weinan.E, Chao M.,Lei W.(2019).\textit{A Priori Estimates For Two-layer Neural Networks}
 
-\bibitem{bassily}
-Bassily, R., Belkin, M., \& Ma, S. (2018). \textit{On exponential convergence of SGD in non-convex over-parametrized learning}. arXiv preprint arXiv:1811.02564.
+\bibitem{groupnorm}
+Y. Wu \& K. He (2018) Group Normalization \textit{European Conference on Computer Vision (ECCV)}
 
-\bibitem{gradient_confusion}
-Sankararaman, K. A., De, S., Xu, Z., Huang, W. R., \& Goldstein, T. (2019). \textit{The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent}. arXiv preprint arXiv:1904.06963.
+\bibitem{fmnist}
+Xiao, H., Rasul, K., \& Vollgraf, R. (2017). Fashion-mnist: a novel image dataset for benchmarking machine learning algorithms. arXiv preprint arXiv:1708.07747.
+
+\bibitem{yin}
+Yin, D., Pananjady, A., Lam, M., Papailiopoulos, D., Ramchandran, K., \& Bartlett, P. (2017). \textit{Gradient diversity: a key ingredient for scalable distributed learning}. arXiv preprint arXiv:1706.05699.
+
 
 \end{thebibliography}
 

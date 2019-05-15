@@ -12,7 +12,7 @@
 %     \usepackage[preprint]{neurips_2019}
 
 % to compile a camera-ready version, add the [final] option, e.g.:
-\usepackage[final]{neurips_2019}
+% \usepackage[final]{neurips_2019}
 
 % to avoid loading the natbib package, add option nonatbib:
 \usepackage[nonatbib]{neurips_2019}
@@ -82,73 +82,152 @@
 \section{Introduction}
 Neural networks have seen remarkable progress in recent years in terms of approximating complex functions using various optimization methods such as stochastic gradient descent. In particular, neural networks in practice have shown how \textit{overparameterization} (an increase in parameters of a model over the number of training data) and \textit{batch normalization}, are able to make complex neural networks easier to train. However, prior to recent research, not much was understood in terms of concretely defining why these methods work so well to speed up training. \textit{Why, precisely, do overparameterization and batch normalization allow for quicker convergence to global and local minima?} In this paper we address this question by investigating a recently-developed concept known as \textit{gradient confusion}, a measure of differences between stochastic gradients of each data sample in a training set, that causes convergence to slow down. We also will discuss overparameterization and batch normalization in-depth, which can be shown (both empirically and theoretically) to lower gradient confusion and thus speed up training.
 
-\section{Gradient Confusion}
+\section{Stochastic Gradient Descent and the Definition of Gradient Confusion}
 We first define gradient confusion in the context of stochastic gradient descent (SGD). Given $N$ training points $X = x_1,...,x_N$, we proceed with gradient descent, back-propagating for each training point. Using these training points, we can specify $N$ loss functions, $\{f\}_{i \in [N]}$. Then we use SGD to solve the empirical risk minimization problem; that is, we hope to find optimal solution
 $$w^* = \text{arg min}_{w \in \mathbb{R}^d} \frac{1}{N} \sum_{i=1}^N f_i (w).$$
-As SGD stochastically chooses a training example and performs gradient updates, the selected gradient $\nabla f_i$ for training example $x_i$ may very well be negatively correlated with another gradient term $\nabla f_j$ for example $x_j$. This negative correlation is defined to have \textit{gradient confusion}. \\
+Then for iteration $k$ of the algorithm, a uniformly-random example and its loss function $\nabla \tilde{f}_k$ is used to update the weights.
+$$w_{k+1} = w_k - \alpha_k \nabla \tilde{f}_k(w_k)$$
+
+As SGD stochastically chooses a training example and performs gradient updates, on iteration $k$, the selected gradient $\nabla \tilde{f}_k$ for training example $x_k$ may very well be negatively correlated with another gradient term $\nabla f_j$ for example $x_j$. This negative correlation is said to have high \textit{gradient confusion}, a quantity introduced by Sankararaman, et al. \cite{impact}. \\
 
 More formally, a set of objective functions $\{f_i\}_{i \in [N]}$ is said to have a $\textit{gradient confusion bound}$ $\eta \geq 0$ if, for fixed $w \in \mathbb{R}^d$,
 
-$$ \nabla f_i(w) \bullet \nabla f_j(w) \geq -\eta, \;\; \forall i \not = j \in [N]$$.
+$$ \langle \nabla f_i(w), \nabla f_j(w) \rangle \geq -\eta, \;\; \forall i \not = j \in [N]$$
 
-That is, the inner product of the gradient vectors of every pair of unique loss functions is bounded by $-\eta$.
+That is, the inner product of the gradient vectors of every pair of unique loss functions is bounded by $-\eta$. Throughout the rest of this paper, we will use \textit{gradient confusion} to refer to the gradient inner product shown here.
 
 \subsection{Intuition}
-Intuitively, low gradient confusion would imply that an epoch of SGD over an entire dataset leads to faster training, because most of the gradient updates of the weights would be aligned with each other. In practice, in high dimensions, \textit{randomly-chosen vectors are nearly orthogonal with high probability} \cite{Milman}; so, we might reasonably expect the \textit{average} randomly-chosen set of training examples to have approximately orthogonal gradients, as long as the number of parameters is large, and the number of training data is small, in order to minimize the probability of encountering gradient confusion. 
+Intuitively, when we have a gradient confusion bound $-\eta$ that is positive, or a very small negative value, we say that there is ``low gradient confusion.'' This case would imply that an epoch of SGD over an entire dataset leads to faster training, because most of the gradient updates of the weights would have components that are aligned with each other. On the other hand, if gradient confusion bound $-\eta$ is a large negative value, we say there is ``high gradient confusion,'' which leads to slower training.
 
-This may hold on expectation, but it is difficult to ensure low gradient confusion without more rigorous reasoning. As such, we present general theories and guarantees of overparameterizing and batch-normalizing a network, as well as empirical experiments, in order to show that low gradient confusion indeed holds. This analysis would then concretely explain why training is sped up when these methods are employed, and also hopefully shed light into how methods can be designed in order to speed up training, which is an incredibly expensive task.
+In practice, in high dimensions, \textit{randomly-chosen vectors are nearly orthogonal with high probability} \cite{Milman}; so, we might reasonably expect the \textit{average} randomly-chosen set of training examples to have approximately orthogonal gradients, as long as the number of parameters is large, and the number of training data is small, in order to minimize the probability of encountering gradient confusion. 
+
+This may hold on expectation, but it is difficult to ensure low gradient confusion without more rigorous reasoning. We also do not have any guarantees that these gradient vectors will behave truly randomly over the course of the SGD algorithm. As such, we present general theories and guarantees of overparameterizing and batch-normalizing a network, as well as empirical experiments, in order to show that low gradient confusion indeed holds. This analysis would then concretely explain why training is sped up when these methods are employed, and also hopefully shed light into how methods can be designed in order to speed up training, which is an incredibly expensive task.
 
 \subsection{The effect of network layer width on gradient confusion}
-We can also introduce a quantity related to gradient confusion, known as \textit{gradient diversity}, proposed by Dong, et al. \cite{dong}, which is a similar measure of the diversity of gradients of loss functions; in this paper, they used this quantity to put bounds on batch sizes for data sets. It is defined as follows:
+Consider a simple two-layer linear network $g(\textbf{x}) = \textbf{W}_1 \textbf{W}_0 \textbf{x}$, with $\textbf{x} \in \mathbb{R}^d$, $g(\textbf{x}) \in \mathbb{R}$, $\textbf{W}_1 \in \mathbb{R}^{l \times d}$, and $\textbf{W}_0 \in \mathbb{R}^{1 \times l}$. Also, suppose element $w_{ij} \stackrel{}{\sim} \text{Normal}(0, 1/l)$, $\forall w_{ij} \in \textbf{W}_0, \textbf{W}_1$, and also $x_i \in \textbf{x} \stackrel{}{\sim} \text{Normal}(0, 1/d)$. Chen, et al. \cite{chen} provides the following bounds for expected value and variance of the inner product:
+$$\mathbb{E}_{\textbf{W}, \textbf{x}}[\langle \nabla f_i, \nabla f_j \rangle] = \Theta(\frac{1}{l}), \;\; \forall x_i, x_j$$
+$$\text{var}_{\textbf{W}, \textbf{x}}(\langle \nabla f_i, \nabla f_j \rangle) \leq \mathbb{E}_{\mathbf{W}, \mathbf{x}} [||\nabla f_i||^2 ||\nabla f_j||]^2 = O(\frac{1}{l^2})$$
 
-$$\triangle_s(w) = \frac{\sum_{i=1}^n || \nabla f_i(w) ||_2^2}{\sum_{i=1}^n || \nabla f_i(w)||_2^2 + \sum_{i \not = j} \nabla f_i(w) \bullet \nabla f_j(w) }$$
+\begin{figure}[h]
+	\centering
+    \includegraphics[width=0.5\textwidth]{pics/overparameterization/grad_inner_prod_exp_var.png}
+	\caption{Simulation by Sankararaman et al. \cite{gradient_confusion} showing the mean and variance of gradient inner products for linear neural networks.}
+	\label{fig:mean_inner_prod}
+\end{figure}
 
-As we can see, gradient confusion is present in the denominator. If every gradient was the same, $\triangle_s(w) = 1$; on the contrary, $\triangle_s(w)$ shrinks as gradient confusion grows. \\
+This implies that width $l$ and gradient confusion have an inverse relationship. The proof can be found in the appendix of Chen, et al. \cite{chen}. The paper also showcases experiments of which we abbreviate here in Fig. \ref{fig:mean_inner_prod}, showcasing the relationship between network width and gradient confusion. They used a fully-connected 5-layer linear neural network of input dimension $d = 100$, where each layer took on the width specified in the graph. Both mean and variance of the gradient inner products decrease at a rate of $O(1/l)$, thus verifying the bounds above.
 
-Now, consider a simple two-layer linear network $g(\textbf{x}) = \textbf{W}_1 \textbf{W}_0 \textbf{x}$, with $\textbf{x} \in \mathbb{R}^d$, $g(\textbf{x}) \in \mathbb{R}$, $\textbf{W}_1 \in \mathbb{R}^{l \times d}$, and $\textbf{W}_0 \in \mathbb{R}^{1 \times l}$. Also, suppose element $w_{ij} \stackrel{}{\sim} \text{Normal}(0, 1/l)$, $\forall w_{ij} \in \textbf{W}_0, \textbf{W}_1$, and also $x_i \in \textbf{x} \stackrel{}{\sim} \text{Normal}(0, 1/d)$. Chen, et al. \cite{chen} provides a bound, which can be further simplified as the following:
-$$ \triangle_s(w) \geq \frac{1}{n} \frac{\Theta (nld)}{\Theta (ln + dn + ld)} = \frac{\Theta(ld)}{\Theta(ln + dn + ld)} \approx \frac{\Theta(ld)}{\Theta(l + d)}$$ 
-for sufficiently large $n$. Assuming least-square losses we then have $\mathbb{E}_{\textbf{W}, \textbf{x}}[\nabla f_i \bullet \nabla f_j] = \Theta(\frac{1}{l})$, $\forall x_i, x_j$. We also have a bound on variance, which is $\text{var}_{\textbf{W}, \textbf{x}}(\nabla f_i \bullet \nabla f_j) \leq \mathbb{E}_{\mathbf{W}, \mathbf{x}} [||\nabla f_i||^2 ||\nabla f_j||]^2 = O(\frac{1}{l^2})$. This implies that width $l$ and gradient confusion have an inverse relationship.\\
+We can now directly apply Chebyshev's inequality to their result get our own more precise understanding of the implications behind these bounds:
+$$\boxed{\mathbf{P}\left( \left\lvert \langle \nabla f_i, \nabla f_j \rangle - \Theta(\frac{1}{l}) \right\rvert \geq \epsilon  \right) \leq \frac{1}{\epsilon^2}O(\frac{1}{l^2}), \;\; \forall i \not = j \in [N]}$$
+As width $l$ of the middle layer is increased, terms $\Theta(1/l)$ and $O(1/l^2)$ approximate to zero. This shows that the probability of the inner product of any two gradients of the losses deviating greatly from zero is very small. That is, as the width increases, the gradient inner products concentrate more towards zero, and therefore become more deterministic; this deterministic behavior of gradients with width overparameterization agrees with the findings of other works \cite{oymak}, \cite{bassily}, \cite{SimonDu}.\\
 
-As such, overparameterizing a network by increasing width certainly reduces gradient confusion, thus leading to faster training times. In order to precisely understand why this is the case from an optimization point of view, we dive deeper into work by S. Du, et al. which discusses how gradient descent can provably optimize overparametrized networks.
+As such, overparameterizing a network by increasing width certainly reduces gradient confusion, thus leading to faster training time. In order to precisely understand why this is the case from an optimization point of view, we dive deeper into work by S. Du, et al \cite{SimonDu}. which discusses how gradient descent can provably optimize overparametrized networks.
 
 \section{Over-parameterization}
-We survey previous work on optimization and generalization aspects of two-layer neural networks, which mainly focus on how they converge to global minimum and generalize in the overpameterized setting. \textsl{Gradient Descent Provably Optimizes over-parameterized neural networks} by Du et al. and \textsl{Fine-Grained Analysis of Optimization and Generalization for Overparameterized Tow-layer Neural Networks} by Arora et al. mainly discuss gradient descent convergence, while \textsl{A Priori Estimates For Two-layers Neural Networks} by Arora et al. and \textsl{A Comparative Analysis of the Optimization and Generalization Property of Two-layer Neural Network and Random Feature Models Under Gradient Descent Dynamics} by Weinan discuss about generalization bounds. 
+We survey previous research work on optimization and generalization aspects of two-layer neural networks, which mainly focus on how they converge to global minimum and generalize in the over-parameterized setting. To investigate convergence guarantees to global minima, and study about speed of convergence, we focus on Paper \cite{SimonDu} by S.Du which talks about how over-parameterization makes Gram matrix (H(x)) remains positive definite and holds a lower bounded least eigenvalue that guarantees the linear convergence to global minima. Paper \cite{SoudryCarmon} by Soundry and Carmon discuss by analyzing the properties of differentiable local minima (DLMs) of the mean square error (MSE) for mild over-parameterization, it guarantees zero training loss for single hidden layer and multiple hidden layers cases. Paper \cite{Arora} by Arora refines the analysis of paper \cite{SimonDu} with a larger width and prove why true labels will convergence faster than random labels. And it also discussed about generalization bounds, while papers \cite{Weinan1} and \cite{Weinan2} by Weinan have a further discussion about generalization bounds. 
 
-\subsection{Gradient Descent Provably Optimizes over-parameterized neural networks}
-One empirical observation of network training is that, even though optimization objective function may be non-convex and non-smooth, randomly initialized first-order methods such as stochastic gradient descent can still find global minimums. Surprisingly, this property is not correlated with labels. A widely-believed explanation on why several neural networks can fit all training labels is that the networks are over-parameterized. \\
-In this paper, we rigorously prove that as long as no two inputs are parallel and m is large enough, with randomly initialized $a$ and $\textbf{\textsc{W(0)}}$, gradient descent achieves zero training loss at a linear convergence rate, i.e., it finds a solution $\textbf{\textsc{W(K)}}$ with $L(\textbf{\textsc{W(K)}}) \leq \epsilon$ in $K = O(\log(1/\epsilon))$ iterations.
+For the experiment part, we refer to Paper  \cite{SimonDu} by varying different width to prove that over-parameterization can significantly improve the converge rate, other aspects. Then we set up our own experiment to reproduce but with much more neurons to see the pattern from a different view. 
 
-Convergence Rate of Gradient Flow,
-Continuous time analysis
-Theorem 3.2 Suppose Assumption 3.1 (if for any $i \neq j,x_i \nparallel x_j, then \lambda_0 >0$) holds and for all $i \in [n],\|x_i\|_{2} = 1$ and $|y_i|\leq C$ for some constant C, then if we set the number of hidden nodes $m=\Omega (\frac{n^6}{\lambda^4_0 \sigma ^3})$ and we i,i,d initialize $w_r\sim n(0,I),a_r \sim unif[{-1,1}] for r\in [m]$, then with probability at least $1-\sigma$ over the initialization, we have 
+\subsection{Convergence to Global Minima}
+In Paper\cite{SimonDu}, it addresses that for an non-convex and non-smooth optimization objective function, even with random labels, with the randomly initialized first-order methods such as stochastic gradient descent, it can still guarantee to converge to zero training loss and find global minimums.\\
+
+The theory part separates the discussion with continuous time analysis and discrete time analysis.And we are going to mainly focus on continuous time analysis part for theorem proofs. To set the foundation for the discussion, it firstly define the concept of gradient flow, which represents gradient descent with infinitesimal steps. To represent in a mathematical way:
+\begin{center}
+    $\frac{d W_r(t)}{dt} = -\frac{\partial L(w(t),a)}{\partial W_r(t)}$
+\end{center}
+
+The main theorem for the convergence rate of gradient flow has four mean assumptions, which can be addressed as below:
+\begin{itemize}
+\item No two inputs are parallel and Gram matrix $H(x)$ has a positive minimum eigenvalue.
+\item Scaled data:$\|x_i\|_{2} = 1$ and $|y_i|\leq C$. As noted,these assumptions are only for simplification and also put in a bounded label to match with most real world data set.  
+\item Over-parameterization :$m=\Omega(\frac{n^6}{\lambda^4_0 \sigma^3})$
+\item Random initialization: $W$ i,i,d initialize $w_r\sim N(0,I),\ a_r \sim unif[{-1,1}]$
+\end{itemize}
+
+\text{for}$\ r\in [m]$, then with probability at least $1-\sigma$ over the initialization, we have 
 \begin{center}
     $\|u(t)-y\|^2_2 \leq exp(-\lambda_0 t)\|u(0)-y\|^2_2$
 \end{center}
 
-This theorem establishes that if m is large enough, the training error converges to 0 at a linear rate. Here we assume $\|x_i\|_2 = 1$ only for simplicity and it is not hard to relax this condition. The bounded label condition also holds for most real world data set. The number of hidden nodes m required is $\omega(\frac{n^6}{\lambda^4_0 \sigma ^3})$,which depends on the number of samples $n$, $\lambda_0$, and the failure probability $\sigma$. Over-parameterization,i.e.,the fact $m = poly(n,1/{\lambda_0},1/{\sigma}$,plays a crucial role in gradient descent to find the global minimum. 
+What this theorem shows is that if m is large enough, the training error can be guaranteed that it will converge to 0 with a linear rate. 
 
-discrete time analysis
-Suppose Assumption 3.1 (if for any $i \neq j,x_i \nparallel x_j, then \lambda_0 >0$) holds and for all $i \in [n],\|x_i\|_{2} = 1$ and $|y_i|\leq C$ for some constant C, then if we set the number of hidden nodes $m=\Omega (\frac{n^6}{\lambda^4_0 \sigma ^3})$ and we i,i,d initialize $w_r\sim n(0,I),a_r \sim unif[{-1,1}] for r\in [m]$, then with probability at least $1-\sigma$ over the initialization, we have 
+For the proof of this theorem, there are four lemmas to explain how the conclusion come out step by step. Firstly with arc-consine kernels and law of the large numbers. It is not hard to show that Gram matrix $H_{ij}(t)$ satisfied the function:
+\begin{center}
+    $H_{ij}(t) = \frac{1}{m} x_i^T x_j\sum_{r=1}^{m}\Pi\left\{ x_i^T w_r(t)\geq 0,x_j^T w_r(t)\geq 0\right\}$
+\end{center}
+And if m is large enough, it makes the initial random state close to rates during the training ($W(t)\approx W$). And then $H(t) \approx H(0) \approx H^{\infty}$. In that case, the derivative of predicted value can be written as 
+\begin{center}
+    $\frac{d u(t)}{dt} = H(t)(y-u(t)) \approx H^{\infty}(y-u(t))$
+\end{center}
+With all these foundations addressed above, then in lemma 1 it shows $H(0)$ and $H^{\infty}$ are close based on the Law of Large Numbers and $H(0)$ has a lower bounded least eigenvalue with high probability. Lemma 2 makes a further step and points out that If weights $w_r(t)$ is stable, $H(t)$ is close to $H^{\infty}$ as well. Lemma 3 started to show with the least eigenvalue of $H(t)$ is lower bounded, the loss will converges at a linear convergence rate as well as weights at t will be close to the initialization one. Lemma 4 broadcasts the lemma 3 to a wider realm R to fit in all t. \\ 
+
+Similar to continuous time analysis, discrete time analysis
+also comes to the conclusion that with probability at least $1-\sigma$ over the initialization, we have 
 \begin{center}
     $\|u(t)-y\|^2_2 \leq (1-\frac{\eta \lambda_0}{2})^k\|u(0)-y\|^2_2$
 \end{center}
-It shows even though the objective function is non-smooth and non-convex, gradient descent with a constant step size still enjoys a linear convergence rate.
+\\
+In Paper\cite{Arora}, it refines the analysis of Paper \cite
 
-By using synthetic data, experiments have been done from three aspects: 
-\begin{itemize}
-\item how the amount of over-parameterization affects the convergence rates.
-\item the relation between the amount of over-parameterization and the number of pattern changes.
-\item the relation between the amount of over-parameterization and the maximum of the distances between weight vectors and their initialization. 
-\end{itemize}
-And the result shows as m becomes larger, convergence rate is better;the percentiles of pattern changes and the maximum distance from the initialization become smaller.
 
-However, there are more directions for the further research. 
-\begin{itemize}
-\item the generalization to deep neural networks with more hidden layers.
-\item the number of hidden nodes m required can be reduced. 
-\item instead of using empirical loss, another potential function maybe able to be used to prove the convergence rates of accelerated methods. 
-\end{itemize}
+\\
 
+\subsection{Experiments}
+
+In Paper\cite{SimonDu},by using synthetic data, experiments in the paper has uniformly generates $n = 1000$ data points from a $d = 1000$ dimensional unit sphere and generate labels from a one-dimensional standard Gaussian distribution. 
+Run 100 epochs of gradient descent with different widths $m$.Figure \ref{fig:convergerate} shows how different m affects the convergence rates. As m becomes lager, it has a better convergence rate.
+
+\begin{figure}[h]
+	\centering
+    \includegraphics[scale= 0.5]{pics/overparameterization/ConvergeRate.PNG}
+	\label{fig:convergerate}
+\end{figure}
+
+Figure \ref{fig:patternsample} tests the relation between different m and the number of pattern changes.
+\begin{figure}[h]
+	\centering
+    \includegraphics[scale= 0.5]{pics/overparameterization/PatternSample.PNG}
+	\label{fig:patternsample}
+\end{figure}
+
+Figure \ref{fig:maxdistance} tests the relation between different m and maximum distances between wights vectors and their initialization.
+\begin{figure}[h]
+	\centering
+    \includegraphics[scale= 0.5]{pics/overparameterization/maximumdistance.PNG}
+	\label{fig:maxdistance}
+\end{figure}
+
+So generally with over-parameterization m becomes larger, convergence rate is better;the percentiles of pattern changes and the maximum distance from the initialization become smaller.
+\\
+
+We did our own experiments referring to Paper\cite{SimonDu} result.The experiment uses synthetic data, with $X$ from random generator $n = 10$ data points, and $d = 1000$ dimensional unit sphere. It runs with $m = 100000$ neurons.$y$ labels from a one-dimensional standard Gaussian distribution.
+
+In Figure \ref{fig:zeroloss}, it shows when $m$ is large enough, the training loss will converge to 0 even with random labels. 
+
+\begin{figure}[h]
+	\centering
+    \includegraphics[scale = 0.5]{pics/overparameterization/loss_over_time_0-1k.jpg}
+	\label{fig:zeroloss}
+\end{figure}
+
+
+On the top of graph Figure\ref{fig:zeroloss} result, Figure\ref{fig:twohundredloss} shows the convergence rate is generally fast with not too much epochs required with over-parameterization. 
+
+\begin{figure}[h]
+	\centering
+    \includegraphics[scale = 0.5]{pics/overparameterization/loss_over_time_200-1k.jpg}
+	\label{fig:twohundredloss}
+\end{figure}
+
+In addition, \ref{fig:maxdistanceloss}  tests on the maximum of the distances between updated weight vector and its initialized value  with a large m, the distance converges with increased epochs and converges pretty fast. 
+
+\begin{figure}[h]
+	\centering
+    \includegraphics[scale = 0.5]{pics/overparameterization/max_weight_change.jpg}
+	\label{fig:twohundredloss}
+\end{figure}
+
+\\
 \subsection{Fine-Grained Analysis of Optimization and Generalization for Overparameterized Tow-layer Neural Networks}
 Previous works shows that sufficiently powerful nets(with vastly more parameters than number of training samples) can attain zero training error, regardless of whether the data is properly labeled or randomly labeled.The gradient descent can allow an overparameterized multi-layer net to attain arbitrarily low training error on fairly generic datasets.
 
@@ -306,7 +385,7 @@ Suppose the whole training data are split into $B$ mini-batches. When inference 
 
 
 \subsection{Loss-Landscape Smoothing} \label{landsmooth}
-In Santurkar, et al, \cite{landscape} they show that landscape of loss function is smoother in BatchNorm network. BatchNorm reduces effective Lipschitzness constant and improve smoothness of the gradient.
+In paper \cite{landscape} they show that landscape of loss function is smoother in BatchNorm network. BatchNorm reduces effective Lipschitzness constant and improve smoothness of the gradient.
 
 \subsubsection{Observations}
 
@@ -390,7 +469,7 @@ If $\mathbb{\textit{H}}_{jj}$ preserves the relative norms of $\hat{g}_j$ and $\
 
 The above inequality holds true if it satisfies two conditions: 1. the loss is locally convex (it is true for deep network with piecewise-linear activation functions) so the Hessian is positive semi-definite. 2. Negative gradient $\hat{g}_j$ points to the minimum of the loss so the inner product $\langle\hat{g}_j,\hat{y}_j\rangle>0$. They claim that both conditions are fairly mild assumptions. The quadratic Hessian term is the second order term of the Taylor expansion of loss around the current position. When this term is reduced by BatchNorm, it is more accurate to predict the loss around the current position by using only the first order term.
 \end{comment}
-Next, in \textbf{Theorem 4.4}, they transfer the above theorem to one that relates to layer weights by using chain rule $\frac{\partial\hat{L}}{\partial W_{.j}}=\textbf{X}^T\big(\frac{\partial\hat{L}}{\partial y_{j}}\big)$. Let $g_j=\underset{||X||\leq\lambda}{\mathrm{max}}\big|\big|\nabla_W\mathcal{L}\big|\big|^2$, $\hat{g}_j=\underset{||X||\leq\lambda}{\mathrm{max}}\big|\big|\nabla_W\hat{\mathcal{L}}\big|\big|^2$ and $\mu_{g_j}=\frac{1}{m}\langle\mathbf{1},\partial\mathcal{L}/\partial y_j\rangle$ then
+Next, in \textbf{Theorem 4.4}, they transfer the above theorem to one that relates to layer weights by using chain rule $\frac{\partial\hat{L}}{\partial W_{.j}}=\textbf{X}^T\big(\frac{\partial\hat{L}}{\partial y_{j}}\big)$. Let $g_j=\underset{||X||\leq\lambda}{\mathrm{max}}\big|\big|\nabla_{W_{\cdot j}}\mathcal{L}\big|\big|^2$, $\hat{g}_j=\underset{||X||\leq\lambda}{\mathrm{max}}\big|\big|\nabla_{W_{\cdot j}}\hat{\mathcal{L}}\big|\big|^2$ and $\mu_{g_j}=\frac{1}{m}\langle\mathbf{1},\partial\mathcal{L}/\partial y_j\rangle$ then
 
 \begin{align*}
 	\hat{g}_j &\leq 
@@ -405,7 +484,7 @@ The above theorem shows that worst-case bound of the loss gradient w.r.t. layer 
 
 \subsubsection{Discussion}
 
-This paper both empirically and theoretically shows that optimization landscape is smoothed by BatchNorm layer. BatchNorm improves Lipschitzness of gradient of arbitrary loss of deep neural network. However, in this paper the proof is based on an assumption that $\partial\hat{\mathcal{L}}/\partial z_j = \partial\mathcal{L}/\partial y_j$. Further proof is needed for this assumption. Moreover, in the experiment section one of the networks is deep linear network (DLN). Although there are researchers studying DLN for simplicity and claiming that DLN resembles some properties of DNN \cite{dln}, formal theories are needed to explain how well DLN can be generalized to deep neural networks.
+This paper both empirically and theoretically shows that optimization landscape is smoothed by a single BatchNorm layer. BatchNorm improves Lipschitzness of gradient of arbitrary loss of deep neural network. However, in this paper the proof is based on an assumption that $\partial\hat{\mathcal{L}}/\partial z_j = \partial\mathcal{L}/\partial y_j$. Although both $z_j$ and $y_j$ are pre-activations, further proof is still needed for this assumption. Moreover, even if  is only for network of one BatchNorm layer.
 
 % Deep linear network is not discussed in original BatchNorm paper (Ioffe \& Szegedy, 2015), and properties of the simplified architecture of DLN is yet to fully studied. Therefore, this report will focus on the more practical architecture, VGG network.
 
@@ -462,11 +541,11 @@ In the paper an odd function, tanh, is used as activation function. Therefore, t
 \underset{\Tilde{\textbf{W}}}{\min}\Bigg(f_{NN}(\Tilde{\textbf{W}})=\mathbb{E}_{\textbf{z}}\Big[l\Big(F(\textbf{z},\Tilde{\textbf{W}})\Big)\Big]\Bigg)
 \end{align*}
 
-They first show in \textbf{Lemma 2} that if Assumptions 1 \& 2 are true, then a critical point (local/global minimum) $\hat{\textbf{w}}^{(i)}$ for a hidden unit $i$ satisfies that $\forall m=1,\cdots,m$ and a scalar $\hat{c}^{(i)}$.
+They first show in \textbf{Lemma 2} that if Assumptions 1 \& 2 are true, then a critical point (local/global minimum) $\hat{\textbf{w}}^{(i)}$ for a hidden unit $i$ satisfies that $\forall i=1,\cdots,m$ and a scalar $\hat{c}^{(i)}$.
 \begin{align*}
 \hat{\textbf{w}}^{(i)}=\hat{c}^{(i)}\textbf{S}^{-1}\textbf{u}
 \end{align*}
-The above lemma implies that given Gaussian inputs, critical points of all hidden neurons are along the same direction in $\mathcal{R}^d$ space. The scalar $\hat{c}^{(i)}$ depends on $\alpha, \beta$ and $\gamma$ given in later part. Furthermore, the direction of a critical point is only dependant on input into the layer. 
+The above lemma implies that given Gaussian inputs, critical points of all hidden neurons are along the same direction in $\mathbb{R}^d$ space. The scalar $\hat{c}^{(i)}$ depends on $\alpha, \beta$ and $\gamma$ given in later part. Furthermore, the direction of a critical point is only dependant on input into the layer. 
 
 \begin{figure}[h]
 \begin{tabular}{cc}
@@ -651,13 +730,7 @@ On the other hand, Tanh activation function can not be seen as a linear calculat
 Another observation is that the training time of BatchNorm network is twice as much as the regular network. When training a high-capacity network, since it's been observed in other papers' experiments that BatchNorm reduces the training epochs by a factor much larger than 2, the overall training speed is expected to be effectively improved by BatchNorm.
 
 \newpage
-\section*{References}
 
-References follow the acknowledgments. Use unnumbered first-level heading for
-the references. Any choice of citation style is acceptable as long as you are
-consistent. It is permissible to reduce the font size to \verb+small+ (9 point)
-when listing the references. {\bf Remember that you can use more than eight
-  pages as long as the additional pages contain \emph{only} cited references.}
 \medskip
 
 \small
@@ -686,13 +759,37 @@ J.L. Ba, J.R Kiros \& G.E Hinton (2016) Layer Normalization. \textit{arXiv:1607.
 Y. Wu \& K. He (2018) Group Normalization \textit{European Conference on Computer Vision (ECCV)}
 
 \bibitem{Milman}
-Milman, V. D., \& Schechtman, G. (2009). Asymptotic theory of finite dimensional normed spaces: Isoperimetric inequalities in Riemannian manifolds (Vol. 1200). Springer.
+Milman, V. D., \& Schechtman, G. (2009). \textit{Asymptotic theory of finite dimensional normed spaces: Isoperimetric inequalities in Riemannian manifolds} (Vol. 1200). Springer.
 
 \bibitem{chen}
-Chen, L., Wang, H., Zhao, J., Papailiopoulos, D., \& Koutris, P. (2018). The effect of network width on the performance of large-batch training. In Advances in Neural Information Processing Systems (pp. 9302-9309).
+Chen, L., Wang, H., Zhao, J., Papailiopoulos, D., \& Koutris, P. (2018). \textit{The effect of network width on the performance of large-batch }. In Advances in Neural Information Processing Systems (pp. 9302-9309).
 
 \bibitem{dong}
-Yin, D., Pananjady, A., Lam, M., Papailiopoulos, D., Ramchandran, K., \& Bartlett, P. (2017). Gradient diversity: a key ingredient for scalable distributed learning. arXiv preprint arXiv:1706.05699.
+Yin, D., Pananjady, A., Lam, M., Papailiopoulos, D., Ramchandran, K., \& Bartlett, P. (2017). \textit{Gradient diversity: a key ingredient for scalable distributed learning}. arXiv preprint arXiv:1706.05699.
+
+\bibitem{SimonDu}
+Simon S.Du,X.Zhai.,B. Poczos.,A.Singh.(2019).\textit{Gradient Descent Provably Optimizes Over-parameterized Neural Networks}
+
+\bibitem{Arora}
+S.Arora, Simon S.Du, W.Hu ,Z.Li.,R.Wang(2019).\textit{Fine-Grained Analysis of Optimization and Generalization for Overparameterized Two-Layer Neural Networks}
+
+\bibitem{SoudryCarmon}
+D.Soudry, Y.Carmon(2016).\textit{No bad local minima:Data independent training error guarantees for multilayer neural networks}
+
+\bibitem{Weinan1}
+Weinan.E, Chao M.,Lei W.(2019).\textit{A Priori Estimates For Two-layer Neural Networks}
+
+\bibitem{Weinan2}
+Weinan.E, Chao M.,Lei W.(2019).\textit{A Comparative Analysis of the Optimization and Generalization Property of Two-layer Neural Network and Random Feature Models Under Gradient Descent Dynamics}
+
+\bibitem{oymak}
+Oymak, S., \& Soltanolkotabi, M. (2018). Overparameterized Nonlinear Learning: Gradient Descent Takes the Shortest Path?. arXiv preprint arXiv:1812.10004.
+
+\bibitem{bassily}
+Bassily, R., Belkin, M., \& Ma, S. (2018). \textit{On exponential convergence of SGD in non-convex over-parametrized learning}. arXiv preprint arXiv:1811.02564.
+
+\bibitem{gradient_confusion}
+Sankararaman, K. A., De, S., Xu, Z., Huang, W. R., \& Goldstein, T. (2019). \textit{The Impact of Neural Network Overparameterization on Gradient Confusion and Stochastic Gradient Descent}. arXiv preprint arXiv:1904.06963.
 
 \end{thebibliography}
 
